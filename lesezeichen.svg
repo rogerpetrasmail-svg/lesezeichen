@@ -1,0 +1,51 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .bg { fill: #f4f6fb; }
+      .accent { fill: #2f6df6; }
+      .book { fill: #e8f0ff; }
+      .ribbon { fill: #ff6b6b; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect class="bg" width="256" height="256"/>
+
+  <!-- Books (6 columns) -->
+  <g class="accent">
+    <!-- Column 1 -->
+    <rect x="20" y="40" width="25" height="180" rx="2" class="book"/>
+    <!-- Column 2 -->
+    <rect x="50" y="30" width="25" height="190" rx="2" class="book"/>
+    <!-- Column 3 -->
+    <rect x="80" y="50" width="25" height="170" rx="2" class="book"/>
+    <!-- Column 4 -->
+    <rect x="110" y="35" width="25" height="185" rx="2" class="book"/>
+    <!-- Column 5 -->
+    <rect x="140" y="45" width="25" height="175" rx="2" class="book"/>
+    <!-- Column 6 -->
+    <rect x="170" y="40" width="25" height="180" rx="2" class="book"/>
+  </g>
+
+  <!-- Spines with accent color -->
+  <g class="accent">
+    <rect x="20" y="40" width="25" height="180" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+    <rect x="50" y="30" width="25" height="190" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+    <rect x="80" y="50" width="25" height="170" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+    <rect x="110" y="35" width="25" height="185" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+    <rect x="140" y="45" width="25" height="175" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+    <rect x="170" y="40" width="25" height="180" rx="2" fill="none" stroke="#2f6df6" stroke-width="3"/>
+  </g>
+
+  <!-- Ribbon bookmark -->
+  <g>
+    <path class="ribbon" d="M 200 50 L 215 60 L 210 85 L 225 95 L 210 100 L 220 125 L 205 115 L 200 140 Z"/>
+  </g>
+
+  <!-- Highlight effect -->
+  <g fill="none" stroke="white" stroke-width="2" opacity="0.6">
+    <path d="M 30 50 L 30 70"/>
+    <path d="M 60 40 L 60 60"/>
+    <path d="M 90 60 L 90 80"/>
+  </g>
+</svg>
