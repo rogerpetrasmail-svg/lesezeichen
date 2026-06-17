@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Lesezeichen-Verzeichnis</title>
+<style>
+  :root {
+    --bg: #f4f6fb;
+    --panel: #ffffff;
+    --border: #d9dee8;
+    --text: #1f2733;
+    --muted: #6b7686;
+    --accent: #2f6df6;
+    --accent-soft: #e8f0ff;
+    --danger: #e0463e;
+    --hover: #f0f4ff;
+    --shadow: 0 8px 24px rgba(20, 30, 60, 0.14);
+    --radius: 10px;
+    --flyout-width: 270px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+  }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 18px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .toolbar h1 {
+    font-size: 16px;
+    margin: 0;
+    margin-right: auto;
+    font-weight: 600;
+    letter-spacing: .2px;
+  }
+  .toolbar h1 span { color: var(--accent); }
+
+  button.btn {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background .12s, border-color .12s;
+  }
+  button.btn:hover { background: var(--hover); border-color: var(--accent); }
+
+  /* ---------- Board ---------- */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    padding: 14px 18px 40px;
+    align-items: start;
+  }
+  @media (max-width: 1400px) { .board { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 980px)  { .board { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px)  { .board { grid-template-columns: 1fr; } }
+
+  .column {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .column-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 8px 8px 10px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #fbfcff, #f3f6fc);
+  }
+  .column-head input {
+    flex: 1;
+    border: 1px solid transparent;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    padding: 4px 6px;
+    border-radius: 6px;
+    min-width: 0;
+  }
+  .column-head input:hover { background: #fff; }
+  .column-head input:focus { outline: none; border-color: var(--accent); background: #fff; }
+
+  .add-bar {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .add-bar button {
+    flex: 1;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--muted);
+    padding: 5px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  .add-bar button:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
+  /* ---------- Item lists ---------- */
+  .items { list-style: none; margin: 0; padding: 6px; min-height: 14px; }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 6px;
+    border-radius: 7px;
+    position: relative;
+    cursor: default;
+  }
+  .item:hover { background: var(--hover); }
+
+  .item .icon { width: 16px; text-align: center; flex: none; color: var(--muted); }
+
+  .item .label {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .item.url a { color: var(--text); text-decoration: none; }
+  .item.url:hover a { color: var(--accent); }
+
+  .item.folder > .label { font-weight: 600; cursor: pointer; }
+  .item.folder .chev { color: var(--muted); font-size: 11px; }
+
+  .item .actions {
+    display: none;
+    gap: 2px;
+    flex: none;
+  }
+  .item:hover .actions { display: flex; }
+  .item .actions button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 5px;
+  }
+  .item .actions button:hover { background: #fff; color: var(--accent); }
+  .item .actions button.del:hover { color: #fff; background: var(--danger); }
+
+  .empty-hint { color: var(--muted); font-size: 12px; padding: 6px 8px; font-style: italic; }
+
+  /* favicon */
+  img.fav { width: 16px; height: 16px; border-radius: 3px; flex: none; object-fit: contain; }
+
+  /* ---------- Flyout panels ---------- */
+  .flyout {
+    position: fixed;
+    top: 0;
+    height: 100vh;
+    width: var(--flyout-width);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    box-shadow: var(--shadow);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    animation: fade .1s ease;
+  }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  .flyout .fly-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    background: linear-gradient(180deg, #fbfcff, #f3f6fc);
+  }
+  .flyout .add-bar { border-top: none; }
+  .flyout .items { overflow: auto; flex: 1; }
+
+  /* ---------- Modal ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(20, 30, 60, 0.35);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1000;
+  }
+  .modal {
+    background: var(--panel);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    padding: 18px;
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 15px; }
+  .modal label { display: block; font-size: 12px; color: var(--muted); margin: 10px 0 4px; }
+  .modal input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 14px;
+  }
+  .modal input:focus { outline: none; border-color: var(--accent); }
+  .modal .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .modal .row button { padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; border: 1px solid var(--border); background: var(--panel); }
+  .modal .row button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+</style>
+</head>
+<body>
+  <div class="toolbar">
+    <h1>Lesezeichen<span>·</span>Verzeichnis</h1>
+    <button class="btn" id="btn-export">Export</button>
+    <button class="btn" id="btn-import">Import</button>
+    <button class="btn" id="btn-reset">Zurücksetzen</button>
+  </div>
+
+  <div class="board" id="board"></div>
+
+  <input type="file" id="file-import" accept="application/json" style="display:none" />
+
+<script>
+"use strict";
+
+const STORAGE_KEY = "lesezeichen.data.v1";
+const COLUMN_COUNT = 6;
+
+/* ---------------- Data ---------------- */
+let data = load();
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) { /* ignore */ }
+  return defaultData();
+}
+
+function defaultData() {
+  const columns = [];
+  for (let i = 0; i < COLUMN_COUNT; i++) {
+    columns.push({ name: "Spalte " + (i + 1), items: [] });
+  }
+  return { columns };
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+/* ---------------- Path helpers ----------------
+   A path is an array of indices.
+   [ci]            -> a column (its container items = data.columns[ci].items)
+   [ci, i]         -> an item in that column
+   [ci, i, j, ...] -> nested items inside folders
+-------------------------------------------------*/
+function nodeAt(path) {
+  // returns an object that has an `.items` array (column or folder)
+  let node = { items: data.columns[path[0]].items, name: data.columns[path[0]].name };
+  for (let k = 1; k < path.length; k++) {
+    node = node.items[path[k]];
+  }
+  return node;
+}
+function parentItems(path) {
+  return nodeAt(path.slice(0, -1)).items;
+}
+
+/* ---------------- Rendering ---------------- */
+const board = document.getElementById("board");
+
+function renderBoard() {
+  board.innerHTML = "";
+  data.columns.forEach((col, ci) => {
+    const colEl = document.createElement("div");
+    colEl.className = "column";
+
+    // header
+    const head = document.createElement("div");
+    head.className = "column-head";
+    const input = document.createElement("input");
+    input.value = col.name;
+    input.title = "Spaltenname bearbeiten";
+    input.addEventListener("change", () => { col.name = input.value.trim() || ("Spalte " + (ci + 1)); save(); });
+    input.addEventListener("blur", () => { input.value = col.name; });
+    head.appendChild(input);
+    colEl.appendChild(head);
+
+    // add bar
+    colEl.appendChild(makeAddBar([ci]));
+
+    // items
+    const list = document.createElement("ul");
+    list.className = "items";
+    renderItems(col.items, [ci], list);
+    colEl.appendChild(list);
+
+    board.appendChild(colEl);
+  });
+}
+
+function makeAddBar(path) {
+  const bar = document.createElement("div");
+  bar.className = "add-bar";
+
+  const urlBtn = document.createElement("button");
+  urlBtn.textContent = "+ URL";
+  urlBtn.addEventListener("click", () => addUrl(path));
+
+  const folderBtn = document.createElement("button");
+  folderBtn.textContent = "+ Verzeichnis";
+  folderBtn.addEventListener("click", () => addFolder(path));
+
+  bar.appendChild(urlBtn);
+  bar.appendChild(folderBtn);
+  return bar;
+}
+
+function renderItems(items, containerPath, listEl) {
+  listEl.innerHTML = "";
+  if (!items.length) {
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = "leer";
+    listEl.appendChild(hint);
+    return;
+  }
+  items.forEach((item, i) => {
+    const path = containerPath.concat(i);
+    listEl.appendChild(item.type === "folder" ? renderFolder(item, path) : renderUrl(item, path));
+  });
+}
+
+function renderUrl(item, path) {
+  const li = document.createElement("li");
+  li.className = "item url";
+
+  const fav = document.createElement("img");
+  fav.className = "fav";
+  fav.alt = "";
+  fav.src = faviconUrl(item.url);
+  fav.addEventListener("error", () => { fav.replaceWith(makeIcon("🔗")); });
+  li.appendChild(fav);
+
+  const label = document.createElement("span");
+  label.className = "label";
+  const a = document.createElement("a");
+  a.href = item.url;
+  a.textContent = item.name || item.url;
+  a.title = item.url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  label.appendChild(a);
+  li.appendChild(label);
+
+  li.appendChild(makeActions(
+    () => editUrl(path),
+    () => deleteItem(path, "Lesezeichen „" + (item.name || item.url) + "“ löschen?")
+  ));
+  return li;
+}
+
+function renderFolder(item, path) {
+  const li = document.createElement("li");
+  li.className = "item folder";
+
+  li.appendChild(makeIcon("📁"));
+
+  const label = document.createElement("span");
+  label.className = "label";
+  label.textContent = item.name;
+  li.appendChild(label);
+
+  const chev = document.createElement("span");
+  chev.className = "chev";
+  chev.textContent = "▸";
+  li.appendChild(chev);
+
+  li.appendChild(makeActions(
+    () => renameFolder(path),
+    () => deleteItem(path, "Verzeichnis „" + item.name + "“ samt Inhalt löschen?")
+  ));
+
+  // hover -> open flyout
+  li.addEventListener("mouseenter", () => { cancelHide(); openFlyout(path, li); });
+  li.addEventListener("mouseleave", armHide);
+  return li;
+}
+
+function makeIcon(txt) {
+  const span = document.createElement("span");
+  span.className = "icon";
+  span.textContent = txt;
+  return span;
+}
+
+function makeActions(onEdit, onDelete) {
+  const wrap = document.createElement("span");
+  wrap.className = "actions";
+
+  const edit = document.createElement("button");
+  edit.title = "Bearbeiten";
+  edit.textContent = "✎";
+  edit.addEventListener("click", (e) => { e.stopPropagation(); onEdit(); });
+
+  const del = document.createElement("button");
+  del.className = "del";
+  del.title = "Löschen";
+  del.textContent = "×";
+  del.addEventListener("click", (e) => { e.stopPropagation(); onDelete(); });
+
+  wrap.appendChild(edit);
+  wrap.appendChild(del);
+  return wrap;
+}
+
+function faviconUrl(url) {
+  try {
+    const u = new URL(url);
+    return "https://www.google.com/s2/favicons?sz=32&domain=" + encodeURIComponent(u.hostname);
+  } catch (e) {
+    return "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+  }
+}
+
+/* ---------------- Flyout (hover) system ---------------- */
+const flyouts = {};   // level -> element
+let hideTimer = null;
+
+function armHide()    { cancelHide(); hideTimer = setTimeout(closeAllFlyouts, 280); }
+function cancelHide() { if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; } }
+
+function closeFlyoutsFrom(level) {
+  Object.keys(flyouts).map(Number).filter(l => l >= level).sort((a, b) => b - a)
+    .forEach(l => { flyouts[l].remove(); delete flyouts[l]; });
+}
+function closeAllFlyouts() { closeFlyoutsFrom(0); }
+
+function openFlyout(path, triggerEl) {
+  const level = path.length - 1;          // root folder -> level 1
+  closeFlyoutsFrom(level);                // close same level + deeper, then reopen
+  const folder = nodeAt(path);
+
+  const panel = document.createElement("div");
+  panel.className = "flyout";
+
+  const head = document.createElement("div");
+  head.className = "fly-head";
+  head.appendChild(makeIcon("📂"));
+  const title = document.createElement("span");
+  title.textContent = folder.name;
+  head.appendChild(title);
+  panel.appendChild(head);
+
+  panel.appendChild(makeAddBar(path));
+
+  const list = document.createElement("ul");
+  list.className = "items";
+  renderItems(folder.items, path, list);
+  panel.appendChild(list);
+
+  // position next to the trigger, full screen height
+  const rect = triggerEl.getBoundingClientRect();
+  const fw = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--flyout-width"));
+  let left = rect.right;
+  if (left + fw > window.innerWidth) left = Math.max(0, rect.left - fw);
+  panel.style.left = left + "px";
+
+  panel.addEventListener("mouseenter", () => { cancelHide(); closeFlyoutsFrom(level + 1); });
+  panel.addEventListener("mouseleave", armHide);
+
+  document.body.appendChild(panel);
+  flyouts[level] = panel;
+}
+
+/* Re-render whatever is currently visible (board + open flyouts) */
+function refresh() {
+  save();
+  // remember open paths to reopen after closing (positions may shift) -> simplest: close flyouts
+  closeAllFlyouts();
+  renderBoard();
+}
+
+/* ---------------- Actions: add / edit / delete ---------------- */
+function addUrl(containerPath) {
+  showDialog({
+    title: "URL hinzufügen",
+    fields: [
+      { key: "name", label: "Name", value: "" },
+      { key: "url",  label: "URL",  value: "https://" }
+    ],
+    onSave: (vals) => {
+      const url = normalizeUrl(vals.url);
+      if (!url) return;
+      nodeAt(containerPath).items.push({ type: "url", name: vals.name.trim() || url, url });
+      refresh();
+    }
+  });
+}
+
+function editUrl(path) {
+  const item = nodeAt(path);
+  showDialog({
+    title: "URL bearbeiten",
+    fields: [
+      { key: "name", label: "Name", value: item.name },
+      { key: "url",  label: "URL",  value: item.url }
+    ],
+    onSave: (vals) => {
+      const url = normalizeUrl(vals.url);
+      if (!url) return;
+      item.name = vals.name.trim() || url;
+      item.url = url;
+      refresh();
+    }
+  });
+}
+
+function addFolder(containerPath) {
+  showDialog({
+    title: "Verzeichnis anlegen",
+    fields: [{ key: "name", label: "Verzeichnisname", value: "" }],
+    onSave: (vals) => {
+      const name = vals.name.trim();
+      if (!name) return;
+      nodeAt(containerPath).items.push({ type: "folder", name, items: [] });
+      refresh();
+    }
+  });
+}
+
+function renameFolder(path) {
+  const item = nodeAt(path);
+  showDialog({
+    title: "Verzeichnis umbenennen",
+    fields: [{ key: "name", label: "Verzeichnisname", value: item.name }],
+    onSave: (vals) => {
+      const name = vals.name.trim();
+      if (!name) return;
+      item.name = name;
+      refresh();
+    }
+  });
+}
+
+function deleteItem(path, message) {
+  if (!confirm(message)) return;
+  const arr = parentItems(path);
+  arr.splice(path[path.length - 1], 1);
+  refresh();
+}
+
+function normalizeUrl(raw) {
+  let url = (raw || "").trim();
+  if (!url) return "";
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url)) url = "https://" + url;
+  return url;
+}
+
+/* ---------------- Modal dialog ---------------- */
+function showDialog({ title, fields, onSave }) {
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  const h = document.createElement("h3");
+  h.textContent = title;
+  modal.appendChild(h);
+
+  const inputs = {};
+  fields.forEach((f, idx) => {
+    const lab = document.createElement("label");
+    lab.textContent = f.label;
+    const inp = document.createElement("input");
+    inp.value = f.value || "";
+    inputs[f.key] = inp;
+    modal.appendChild(lab);
+    modal.appendChild(inp);
+    if (idx === 0) setTimeout(() => { inp.focus(); inp.select(); }, 0);
+  });
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const cancel = document.createElement("button");
+  cancel.textContent = "Abbrechen";
+  const ok = document.createElement("button");
+  ok.className = "primary";
+  ok.textContent = "Speichern";
+  row.appendChild(cancel);
+  row.appendChild(ok);
+  modal.appendChild(row);
+
+  function close() { overlay.remove(); document.removeEventListener("keydown", onKey); }
+  function commit() {
+    const vals = {};
+    Object.keys(inputs).forEach(k => vals[k] = inputs[k].value);
+    close();
+    onSave(vals);
+  }
+  function onKey(e) {
+    if (e.key === "Escape") close();
+    if (e.key === "Enter")  commit();
+  }
+
+  cancel.addEventListener("click", close);
+  ok.addEventListener("click", commit);
+  overlay.addEventListener("mousedown", (e) => { if (e.target === overlay) close(); });
+  document.addEventListener("keydown", onKey);
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
+/* ---------------- Export / Import / Reset ---------------- */
+document.getElementById("btn-export").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "lesezeichen-" + new Date().toISOString().slice(0, 10) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+const fileInput = document.getElementById("file-import");
+document.getElementById("btn-import").addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      if (!parsed || !Array.isArray(parsed.columns)) throw new Error("Ungültiges Format");
+      data = parsed;
+      refresh();
+    } catch (e) {
+      alert("Import fehlgeschlagen: " + e.message);
+    }
+    fileInput.value = "";
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById("btn-reset").addEventListener("click", () => {
+  if (confirm("Alle Spalten und Lesezeichen löschen und zurücksetzen?")) {
+    data = defaultData();
+    refresh();
+  }
+});
+
+/* close flyouts on scroll/resize to avoid misplacement */
+window.addEventListener("resize", closeAllFlyouts);
+window.addEventListener("scroll", closeAllFlyouts, true);
+
+/* ---------------- Start ---------------- */
+renderBoard();
+</script>
+</body>
+</html>
