@@ -32,6 +32,46 @@ Anschließend im Browser öffnen: <http://localhost:3000>
 
 Den Port kann man per Umgebungsvariable ändern: `PORT=8080 node server.js`.
 
+## Per Datei / Taskleiste starten (Windows)
+
+Statt jedes Mal `node server.js` zu tippen, liegen fertige Starter bei:
+
+- **`Lesezeichen starten.bat`** – Doppelklick: öffnet ein kleines Konsolenfenster
+  (= der laufende Server) und ruft die Seite im Browser auf. Das Fenster schließen
+  beendet den Server.
+- **`Lesezeichen starten.vbs`** – startet den Server **ohne sichtbares Fenster** im
+  Hintergrund und öffnet den Browser. Am besten zum Anheften an die Taskleiste.
+- **`Lesezeichen stoppen.bat`** – beendet einen im Hintergrund laufenden Server
+  (nur nötig, wenn per `.vbs` gestartet).
+
+### An die Taskleiste anheften
+
+1. Rechtsklick auf **`Lesezeichen starten.vbs`** → **Verknüpfung erstellen**.
+2. Falls beim Rechtsklick auf die Verknüpfung **„An Taskleiste anheften“** fehlt:
+   Rechtsklick auf die Verknüpfung → **Eigenschaften** → Feld **Ziel** voranstellen mit
+   `wscript.exe ` (also z. B. `wscript.exe "C:\Pfad\zu\Lesezeichen starten.vbs"`).
+   Danach erscheint die Option.
+3. Optional unter **Eigenschaften → Anderes Symbol** ein eigenes Icon wählen.
+4. Verknüpfung an die Taskleiste ziehen bzw. **An Taskleiste anheften**.
+
+> Hinweis: Node.js muss installiert und im `PATH` sein (Test: `node -v` in der
+> Eingabeaufforderung). Liegt das Projekt in einem Pfad mit Leerzeichen, sind die
+> mitgelieferten Starter bereits darauf vorbereitet.
+
+### macOS / Linux
+
+Eine ausführbare Startdatei anlegen, z. B. `start.command` (macOS) bzw. `start.sh`:
+
+```bash
+#!/bin/bash
+cd "$(dirname "$0")"
+node server.js &
+sleep 1
+open http://localhost:3000   # macOS; unter Linux: xdg-open http://localhost:3000
+```
+
+Danach `chmod +x start.command` ausführen – Doppelklick startet den Server.
+
 ## Bedienung
 
 | Aktion | So geht's |
