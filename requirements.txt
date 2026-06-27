@@ -1,0 +1,8 @@
+# Laufzeit-Abhängigkeiten der Anwendung
+PySide6==6.7.2
+feedparser==6.0.11
+requests==2.32.3
+openpyxl==3.1.5
+
+# Nur für das Bauen des Windows-Installers benötigt (siehe .github/workflows)
+pyinstaller==6.10.0
