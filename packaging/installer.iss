@@ -17,6 +17,10 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+; Quell-Basisverzeichnis ist das Projekt-Stammverzeichnis (eine Ebene über
+; packaging/), da PyInstaller seine Ausgabe nach <root>/dist legt. Alle
+; relativen Pfade unten beziehen sich dadurch auf den Projekt-Stamm.
+SourceDir=..
 OutputDir=installer_output
 OutputBaseFilename=RSS-Rechercheur-Setup-{#MyAppVersion}
 Compression=lzma2
