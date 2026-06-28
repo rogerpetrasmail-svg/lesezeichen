@@ -1,0 +1,298 @@
+{
+  "meta": {
+    "source": "dummy",
+    "generated": "built-in sample"
+  },
+  "gauges": [
+    {
+      "id": "g1",
+      "label": "POWER OUTPUT",
+      "value": 72,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    },
+    {
+      "id": "g2",
+      "label": "CORE TEMP",
+      "value": 64,
+      "min": 0,
+      "max": 120,
+      "unit": "°C"
+    },
+    {
+      "id": "g3",
+      "label": "VELOCITY",
+      "value": 340,
+      "min": 0,
+      "max": 500,
+      "unit": "km/h"
+    },
+    {
+      "id": "g4",
+      "label": "SIGNAL",
+      "value": 88,
+      "min": 0,
+      "max": 100,
+      "unit": "%"
+    }
+  ],
+  "series": {
+    "line": {
+      "label": "SIGNAL FLUX",
+      "points": [
+        {
+          "x": "00:00",
+          "y": 42
+        },
+        {
+          "x": "01:00",
+          "y": 55
+        },
+        {
+          "x": "02:00",
+          "y": 48
+        },
+        {
+          "x": "03:00",
+          "y": 71
+        },
+        {
+          "x": "04:00",
+          "y": 63
+        },
+        {
+          "x": "05:00",
+          "y": 80
+        },
+        {
+          "x": "06:00",
+          "y": 74
+        },
+        {
+          "x": "07:00",
+          "y": 92
+        }
+      ]
+    },
+    "bar": {
+      "label": "THROUGHPUT",
+      "points": [
+        {
+          "label": "ALPHA",
+          "y": 40
+        },
+        {
+          "label": "BRAVO",
+          "y": 65
+        },
+        {
+          "label": "DELTA",
+          "y": 52
+        },
+        {
+          "label": "ECHO",
+          "y": 78
+        },
+        {
+          "label": "FOXT",
+          "y": 60
+        },
+        {
+          "label": "GOLF",
+          "y": 47
+        }
+      ]
+    },
+    "pie": {
+      "label": "DISTRIBUTION",
+      "points": [
+        {
+          "label": "CORE",
+          "y": 35
+        },
+        {
+          "label": "AUX",
+          "y": 25
+        },
+        {
+          "label": "NET",
+          "y": 22
+        },
+        {
+          "label": "RES",
+          "y": 18
+        }
+      ]
+    },
+    "area": {
+      "label": "SYSTEM LOAD",
+      "points": [
+        {
+          "x": "00:00",
+          "y": 30
+        },
+        {
+          "x": "01:00",
+          "y": 45
+        },
+        {
+          "x": "02:00",
+          "y": 40
+        },
+        {
+          "x": "03:00",
+          "y": 60
+        },
+        {
+          "x": "04:00",
+          "y": 55
+        },
+        {
+          "x": "05:00",
+          "y": 72
+        },
+        {
+          "x": "06:00",
+          "y": 68
+        },
+        {
+          "x": "07:00",
+          "y": 85
+        }
+      ]
+    },
+    "scatter": {
+      "label": "SAMPLE FIELD",
+      "points": [
+        {
+          "x": 12,
+          "y": 22
+        },
+        {
+          "x": 28,
+          "y": 41
+        },
+        {
+          "x": 35,
+          "y": 18
+        },
+        {
+          "x": 44,
+          "y": 63
+        },
+        {
+          "x": 51,
+          "y": 47
+        },
+        {
+          "x": 58,
+          "y": 72
+        },
+        {
+          "x": 63,
+          "y": 35
+        },
+        {
+          "x": 70,
+          "y": 58
+        },
+        {
+          "x": 77,
+          "y": 80
+        },
+        {
+          "x": 82,
+          "y": 44
+        },
+        {
+          "x": 88,
+          "y": 66
+        },
+        {
+          "x": 95,
+          "y": 52
+        },
+        {
+          "x": 18,
+          "y": 55
+        },
+        {
+          "x": 33,
+          "y": 77
+        },
+        {
+          "x": 47,
+          "y": 29
+        },
+        {
+          "x": 60,
+          "y": 90
+        },
+        {
+          "x": 73,
+          "y": 12
+        },
+        {
+          "x": 86,
+          "y": 38
+        }
+      ]
+    },
+    "radar": {
+      "label": "PERFORMANCE",
+      "axes": [
+        {
+          "label": "SPD",
+          "y": 80
+        },
+        {
+          "label": "PWR",
+          "y": 65
+        },
+        {
+          "label": "DEF",
+          "y": 50
+        },
+        {
+          "label": "ACC",
+          "y": 72
+        },
+        {
+          "label": "EFF",
+          "y": 60
+        }
+      ]
+    },
+    "combo": {
+      "label": "TREND ANALYSIS",
+      "points": [
+        {
+          "label": "Q1",
+          "bar": 40,
+          "line": 30
+        },
+        {
+          "label": "Q2",
+          "bar": 55,
+          "line": 48
+        },
+        {
+          "label": "Q3",
+          "bar": 50,
+          "line": 62
+        },
+        {
+          "label": "Q4",
+          "bar": 72,
+          "line": 70
+        },
+        {
+          "label": "Q5",
+          "bar": 66,
+          "line": 81
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     GAUGE 3 · "TARGET SCOPE"
+     Fadenkreuz-Optik mit kurzem Aufblend-/Flackereffekt bei Datenänderung.
+     Modular: Crosshair-Layer, Wert-Bogen und Flicker-Overlay getrennt.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Target Scope</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .scope-value { font-size: 40px; font-weight: 700; text-anchor: middle; fill: var(--c-text); }
+  .scope-unit  { font-size: 14px; text-anchor: middle; fill: var(--c-accent); }
+  .cross       { stroke: var(--c-primary); stroke-width: var(--line-width); }
+  .tick        { stroke: var(--c-accent); stroke-width: 1; }
+  /* Flacker-Effekt: wird per Klasse 'flick' kurz aktiviert */
+  .viz.flick   { animation: flicker .55s ease-out; }
+  @keyframes flicker {
+    0%{filter:drop-shadow(0 0 0 var(--c-accent));opacity:1}
+    15%{opacity:.35} 30%{opacity:1} 45%{opacity:.5}
+    60%{opacity:1;filter:drop-shadow(0 0 calc(var(--glow)*2) var(--c-accent))}
+    100%{opacity:1}
+  }
+  .sweep { transform-origin: 150px 150px; animation: sweep calc(6s / var(--speed)) linear infinite; }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title">TARGET SCOPE</div>
+
+    <svg class="viz" id="viz" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet">
+      <!-- Konzentrische Scope-Ringe -->
+      <circle cx="150" cy="150" r="120" class="stroke-primary" style="opacity:.25"/>
+      <circle cx="150" cy="150" r="90"  class="stroke-primary" style="opacity:.18"/>
+      <circle cx="150" cy="150" r="60"  class="stroke-primary" style="opacity:.18"/>
+      <!-- Wert-Bogen -->
+      <circle id="valueArc" cx="150" cy="150" r="120" class="stroke-accent"
+              stroke-linecap="round" transform="rotate(-90 150 150)" stroke-dasharray="0 1000"/>
+      <!-- Fadenkreuz -->
+      <line class="cross" x1="20" y1="150" x2="280" y2="150"/>
+      <line class="cross" x1="150" y1="20" x2="150" y2="280"/>
+      <!-- kleine Skalen-Ticks am Mittelkreuz -->
+      <g id="ticks"></g>
+      <!-- rotierender Radar-Strahl -->
+      <line class="sweep stroke-accent" x1="150" y1="150" x2="150" y2="30" style="opacity:.5"/>
+      <text class="scope-value" id="val" x="150" y="142">0</text>
+      <text class="scope-unit"  id="unit" x="150" y="168"></text>
+    </svg>
+    <div class="module-sub" id="sub">TGT</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var R = 2 * Math.PI * 120;
+
+  // Skalen-Ticks entlang der Kreuz-Achsen
+  (function ticks(){
+    var g = document.getElementById("ticks");
+    for (var i = -5; i <= 5; i++) {
+      if (i === 0) continue;
+      OBS.el("line", { class:"tick", x1:150+i*12, y1:145, x2:150+i*12, y2:155 }, g);
+      OBS.el("line", { class:"tick", x1:145, y1:150+i*12, x2:155, y2:150+i*12 }, g);
+    }
+  })();
+
+  function pickGauge(data){
+    var q=new URLSearchParams(location.search), gs=data.gauges||[];
+    if(q.has("gauge")) for(var i=0;i<gs.length;i++) if(gs[i].id===q.get("gauge")) return gs[i];
+    return gs[parseInt(q.get("index")||"2",10)]||gs[0]||{label:"—",value:0,min:0,max:100,unit:""};
+  }
+
+  function show(g){
+    var pct=Math.max(0,Math.min(1,(g.value-g.min)/(g.max-g.min||1)));
+    document.getElementById("unit").textContent=g.unit||"";
+    document.getElementById("sub").textContent=(g.id||"TGT").toUpperCase();
+    document.querySelector(".module-title").textContent=g.label||"TARGET SCOPE";
+
+    // Flacker-Effekt bei (Daten-)Änderung auslösen
+    var viz=document.getElementById("viz");
+    viz.classList.remove("flick"); void viz.offsetWidth; viz.classList.add("flick");
+
+    var arc=document.getElementById("valueArc");
+    var t0=null,dur=800;
+    function step(ts){ if(!t0)t0=ts; var k=Math.min(1,(ts-t0)/dur);
+      var e=1-Math.pow(1-k,3);
+      document.getElementById("val").textContent=Math.round(g.value*e);
+      arc.setAttribute("stroke-dasharray",(R*pct*e)+" 1000");
+      if(k<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  OBS.loadData().then(function(data){
+    var g=pickGauge(data); show(g);
+    // Demo: alle 8s erneut "Datenänderung" -> Flacker zeigen
+    // (Im echten Betrieb würde ein neuer Datenwert show() auslösen.)
+    setInterval(function(){ show(g); }, 8000);
+  });
+})();
+</script>
+</body>
+</html>

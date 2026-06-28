@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     RADAR 1 · "SPIDER WEB"
+     Pentagon-Netz (eckiges Spinnennetz). Statisch: Datenpolygon skaliert
+     einmalig aus der Mitte heraus.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Radar · Spider Web</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .web    { stroke: var(--c-grid); stroke-width: 1; fill: none; }
+  .spoke  { stroke: var(--c-grid); stroke-width: 1; }
+  .data   { stroke: var(--c-primary); stroke-width: var(--line-width);
+            fill: var(--c-primary); fill-opacity: .25;
+            filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+            transform-box: view-box; transform-origin: 200px 130px;
+            animation: grow-poly calc(1s / var(--speed)) cubic-bezier(.2,.9,.2,1) forwards; }
+  @keyframes grow-poly { from { transform: scale(0); opacity:0; } to { transform: scale(1); opacity:1; } }
+  .vertex { fill: var(--c-accent); }
+  .alabel { fill: var(--c-text); font-size: 11px; text-anchor: middle; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">SPIDER WEB</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g id="web"></g>
+      <polygon class="data" id="data"/>
+      <g id="vertices"></g>
+      <g id="labels"></g>
+    </svg>
+    <div class="module-sub" id="sub">RADAR</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var CX = 200, CY = 130, R = 95;
+
+  function render(data) {
+    var s = (data.series && data.series.radar) || { axes: [] };
+    var axes = s.axes || [];
+    document.getElementById("title").textContent = s.label || "SPIDER WEB";
+
+    var n = axes.length || 5;
+    var max = OBS.extent(axes, function (d) { return d.y; })[1] || 100;
+    function ang(i) { return i / n * 360; }
+
+    // konzentrische Pentagon-Ringe
+    var web = document.getElementById("web");
+    [0.25, 0.5, 0.75, 1].forEach(function (f) {
+      var p = [];
+      for (var i = 0; i < n; i++) { var v = OBS.polar(CX, CY, R * f, ang(i)); p.push(v.x + "," + v.y); }
+      OBS.el("polygon", { class: "web", points: p.join(" ") }, web);
+    });
+    // Speichen + Achsen-Labels
+    var labels = document.getElementById("labels");
+    for (var i = 0; i < n; i++) {
+      var v = OBS.polar(CX, CY, R, ang(i));
+      OBS.el("line", { class: "spoke", x1: CX, y1: CY, x2: v.x, y2: v.y }, web);
+      var lp = OBS.polar(CX, CY, R + 16, ang(i));
+      OBS.el("text", { class: "alabel", x: lp.x, y: lp.y + 4 }, labels).textContent = (axes[i] && axes[i].label) || ("A" + i);
+    }
+
+    // Datenpolygon
+    var pts = [], vg = document.getElementById("vertices");
+    for (var j = 0; j < n; j++) {
+      var r = R * (axes[j].y / max);
+      var v2 = OBS.polar(CX, CY, r, ang(j));
+      pts.push(v2.x + "," + v2.y);
+      OBS.el("circle", { class: "vertex", cx: v2.x, cy: v2.y, r: 3 }, vg);
+    }
+    document.getElementById("data").setAttribute("points", pts.join(" "));
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

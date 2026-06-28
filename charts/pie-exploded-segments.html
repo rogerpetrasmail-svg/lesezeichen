@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     PIE 2 · "EXPLODED SEGMENTS"
+     Tortensegmente mit Abstand zur Mitte (exploded). Statisch: Segmente
+     gleiten einmalig nach außen + faden ein.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Pie · Exploded Segments</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .slice { stroke: rgba(0,0,0,.35); stroke-width: 1; opacity: 0;
+           animation: pop calc(.8s / var(--speed)) ease-out forwards; }
+  @keyframes pop { from { opacity: 0; } to { opacity: 1; } }
+  .slabel { fill: var(--c-text); font-size: 11px; text-anchor: middle; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">EXPLODED SEGMENTS</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g id="pie" transform="translate(200,130)"></g>
+    </svg>
+    <div class="module-sub" id="sub">PIE</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var R = 90, EXPLODE = 12;
+
+  // Kreissegment-Pfad (Mittelpunkt 0,0), Start/Endwinkel in Grad
+  function arcPath(r, a0, a1) {
+    var p0 = OBS.polar(0, 0, r, a0), p1 = OBS.polar(0, 0, r, a1);
+    var large = (a1 - a0) > 180 ? 1 : 0;
+    return "M0 0 L" + p0.x + " " + p0.y +
+           " A" + r + " " + r + " 0 " + large + " 1 " + p1.x + " " + p1.y + " Z";
+  }
+
+  function render(data) {
+    var s = (data.series && data.series.pie) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "EXPLODED SEGMENTS";
+
+    var total = pts.reduce(function (a, p) { return a + p.y; }, 0) || 1;
+    var pie = document.getElementById("pie");
+    var ang = 0;
+
+    pts.forEach(function (p, i) {
+      var sweep = p.y / total * 360;
+      var a0 = ang, a1 = ang + sweep, mid = (a0 + a1) / 2;
+      // Versatz nach außen (explode) entlang der Segment-Mitte
+      var push = OBS.polar(0, 0, EXPLODE, mid);
+      var path = OBS.el("path", {
+        class: "slice",
+        d: arcPath(R, a0, a1),
+        fill: i % 2 ? "var(--c-accent)" : "var(--c-primary)",
+        transform: "translate(" + push.x + "," + push.y + ")",
+        opacity: 0
+      }, pie);
+      path.style.fillOpacity = 0.45 + 0.5 * (1 - i / Math.max(1, pts.length - 1));
+      path.style.animationDelay = (i * 0.12) + "s";
+
+      // Prozent-Label außerhalb
+      var lp = OBS.polar(0, 0, R + 22, mid);
+      var t = OBS.el("text", { class: "slabel", x: lp.x, y: lp.y + 4 }, pie);
+      t.textContent = Math.round(p.y / total * 100) + "%";
+      ang = a1;
+    });
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

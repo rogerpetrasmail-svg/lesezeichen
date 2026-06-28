@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     COMBO 2 · "MIN/MAX CAGE"
+     Verbunddiagramm: Mittelwert-Linie eingefasst zwischen Min-/Max-
+     Grenzlinien ("Käfig"). Statisch: Band fadet ein, Linie zeichnet sich.
+     Nutzt die combo-Serie (bar = Wert, line = Trend) und leitet Min/Max
+     als Hüllkurve um die Werte ab.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Combo · Min/Max Cage</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .axis    { stroke: var(--c-grid); stroke-width: 1; }
+  .cage    { stroke: var(--c-primary); stroke-width: 1; stroke-dasharray: 4 4; fill: none; opacity:.7; }
+  .band    { fill: var(--c-primary); fill-opacity: .12; opacity: 0;
+             animation: fade-in calc(1.2s / var(--speed)) ease forwards .3s; }
+  .mid     { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
+             filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+             stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+             animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .node    { fill: var(--c-accent); opacity: 0; animation: fade-in .4s ease forwards; }
+  .blabel  { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity:.85; }
+  .ctag    { fill: var(--c-primary); font-size: 9px; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">MIN / MAX CAGE</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g id="axis"></g>
+      <path class="band" id="band"/>
+      <path class="cage" id="cmax"/>
+      <path class="cage" id="cmin"/>
+      <path class="mid"  id="mid"/>
+      <g id="nodes"></g>
+      <g id="labels"></g>
+    </svg>
+    <div class="module-sub" id="sub">COMBO</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 30, r: 24, t: 24, b: 32 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+
+  function render(data) {
+    var s = (data.series && data.series.combo) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = (s.label || "MIN / MAX CAGE");
+
+    // Mittelwert = line; Min/Max als Hüllkurve aus bar/line abgeleitet
+    var rows = pts.map(function (p) {
+      var mid = (p.line != null ? p.line : p.bar);
+      var spread = Math.max(8, mid * 0.22);
+      return { mid: mid, min: mid - spread, max: mid + spread };
+    });
+
+    var maxV = OBS.extent(rows, function (d) { return d.max; })[1] || 1;
+    var ys = OBS.scale(0, maxV, py0, py1);
+    var n = rows.length, slot = (px1 - px0) / Math.max(1, n - 1);
+    var cx = function (i) { return px0 + slot * i; };
+
+    var ax = document.getElementById("axis");
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
+
+    var maxPath = rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.max); }).join(" ");
+    var minPath = rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.min); }).join(" ");
+    document.getElementById("cmax").setAttribute("d", maxPath);
+    document.getElementById("cmin").setAttribute("d", minPath);
+    // Füll-Band zwischen Max und Min
+    var band = maxPath + " L" + cx(n - 1) + " " + ys(rows[n - 1].min) + " " +
+               rows.slice().reverse().map(function (r, i) { return "L" + cx(n - 1 - i) + " " + ys(r.min); }).join(" ") + " Z";
+    document.getElementById("band").setAttribute("d", band);
+
+    var mid = document.getElementById("mid");
+    mid.setAttribute("d", rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.mid); }).join(" "));
+    mid.style.setProperty("--len", OBS.pathLen(mid));
+
+    var nodes = document.getElementById("nodes"), labels = document.getElementById("labels");
+    rows.forEach(function (r, i) {
+      var c = OBS.el("circle", { class: "node", cx: cx(i), cy: ys(r.mid), r: 3 }, nodes);
+      c.style.animationDelay = (0.8 + i * 0.1) + "s";
+      OBS.el("text", { class: "blabel", x: cx(i), y: py0 + 16 }, labels).textContent = pts[i].label;
+    });
+    // Min/Max-Tags
+    OBS.el("text", { class: "ctag", x: cx(0) + 2, y: ys(rows[0].max) - 4 }, labels).textContent = "MAX";
+    OBS.el("text", { class: "ctag", x: cx(0) + 2, y: ys(rows[0].min) + 12 }, labels).textContent = "MIN";
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

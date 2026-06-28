@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     GAUGE 1 · "ORBITAL CORE"
+     Zentralwert in der Mitte, feine Skalenringe rotieren gegenläufig.
+     Modularer Aufbau: jede Ring-Ebene ist eine eigene <g>-Gruppe, damit
+     Struktur/Optik später leicht änderbar ist.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Orbital Core</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  /* --- Modul-spezifische Animationen ----------------------------- */
+  /* Geschwindigkeit hängt am globalen Faktor --speed (Customizer).   */
+  .ring-outer { animation: spin-cw  calc(40s / var(--speed)) linear infinite; transform-origin: 50% 50%; }
+  .ring-mid   { animation: spin-ccw calc(28s / var(--speed)) linear infinite; transform-origin: 50% 50%; }
+  .ring-inner { animation: spin-cw  calc(18s / var(--speed)) linear infinite; transform-origin: 50% 50%; }
+  @keyframes spin-cw  { to { transform: rotate(360deg); } }
+  @keyframes spin-ccw { to { transform: rotate(-360deg); } }
+
+  .core-value { font-size: 48px; font-weight: 700; text-anchor: middle; fill: var(--c-text); }
+  .core-unit  { font-size: 16px; text-anchor: middle; fill: var(--c-accent); }
+  .value-arc  { transition: stroke-dasharray .8s ease; }
+</style>
+</head>
+<body>
+  <!-- Jedes Modul bringt seinen eigenen Tech-Rahmen mit -->
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">ORBITAL CORE</div>
+
+    <svg class="viz glow" viewBox="0 0 300 300" preserveAspectRatio="xMidYMid meet">
+      <!-- Ring-Ebenen werden per JS mit Tick-Marks gefüllt -->
+      <g class="ring-outer" id="ringOuter"></g>
+      <g class="ring-mid"   id="ringMid"></g>
+      <g class="ring-inner" id="ringInner"></g>
+      <!-- Statischer Wert-Bogen (zeigt den eigentlichen Messwert) -->
+      <circle cx="150" cy="150" r="78" class="stroke-primary" style="opacity:.18"/>
+      <circle id="valueArc" cx="150" cy="150" r="78" class="stroke-accent value-arc"
+              stroke-linecap="round" transform="rotate(-90 150 150)"
+              stroke-dasharray="0 1000"/>
+      <text class="core-value" id="val" x="150" y="158">0</text>
+      <text class="core-unit"  id="unit" x="150" y="184"></text>
+    </svg>
+    <div class="module-sub" id="label">SYS</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+/* --- Modul-Logik: liest ?gauge=ID oder ?index=N, sonst erste ------ */
+(function () {
+  var TWO_PI_R = 2 * Math.PI * 78;
+
+  // Tick-Marks gleichmäßig auf einem Radius verteilen
+  function buildRing(group, radius, count, len, op) {
+    group.innerHTML = "";
+    for (var i = 0; i < count; i++) {
+      var ang = (i / count) * 360;
+      var p1 = OBS.polar(150, 150, radius, ang);
+      var p2 = OBS.polar(150, 150, radius - len, ang);
+      var line = OBS.el("line", {
+        x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+        class: i % 5 === 0 ? "stroke-accent" : "stroke-primary",
+        "stroke-width": 1, opacity: op
+      }, group);
+    }
+  }
+
+  function pickGauge(data) {
+    var q = new URLSearchParams(location.search);
+    var gs = data.gauges || [];
+    if (q.has("gauge")) {
+      for (var i = 0; i < gs.length; i++) if (gs[i].id === q.get("gauge")) return gs[i];
+    }
+    var idx = parseInt(q.get("index") || "0", 10);
+    return gs[idx] || gs[0] || { label: "—", value: 0, min: 0, max: 100, unit: "" };
+  }
+
+  function render(data) {
+    buildRing(document.getElementById("ringOuter"), 130, 60, 10, 0.7);
+    buildRing(document.getElementById("ringMid"),   108, 40, 7,  0.5);
+    buildRing(document.getElementById("ringInner"),  92, 30, 5,  0.35);
+
+    var g = pickGauge(data);
+    var pct = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min || 1)));
+    document.getElementById("title").textContent = g.label || "ORBITAL CORE";
+    document.getElementById("label").textContent = (g.id || "SYS").toUpperCase();
+    document.getElementById("unit").textContent = g.unit || "";
+
+    // Wert hochzählen (einmalige In-Animation)
+    var arc = document.getElementById("valueArc");
+    var target = g.value, t0 = null, dur = 900;
+    function step(ts) {
+      if (!t0) t0 = ts;
+      var k = Math.min(1, (ts - t0) / dur);
+      var e = 1 - Math.pow(1 - k, 3);
+      document.getElementById("val").textContent = Math.round(target * e);
+      arc.setAttribute("stroke-dasharray", (TWO_PI_R * pct * e) + " 1000");
+      if (k < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

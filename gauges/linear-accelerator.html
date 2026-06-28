@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     GAUGE 2 · "LINEAR ACCELERATOR"
+     Horizontaler Füllbalken mit durchlaufendem Lichtpunkt-Scan-Effekt.
+     Modular: Balken-Hintergrund, Füllung und Scan-Layer sind getrennt.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Linear Accelerator</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .acc-wrap { width: 78%; }
+  .acc-head { display:flex; justify-content:space-between; align-items:baseline;
+              margin-bottom: 10px; }
+  .acc-label { font-size: 14px; letter-spacing: 2px; color: var(--c-accent); }
+  .acc-value { font-size: 34px; font-weight: 700; color: var(--c-text); }
+  .acc-value small { font-size: 14px; color: var(--c-accent); margin-left: 4px; }
+
+  .bar-track {
+    position: relative; height: 26px; border: var(--line-width) solid var(--c-primary);
+    border-radius: 3px; overflow: hidden;
+    background: linear-gradient(90deg, rgba(211,84,0,.06) 0 100%);
+  }
+  /* Stufen-Markierungen im Hintergrund (Tech-Optik) */
+  .bar-track::before {
+    content:""; position:absolute; inset:0;
+    background-image: repeating-linear-gradient(90deg,
+      transparent 0, transparent 9%, var(--c-grid) 9%, var(--c-grid) calc(9% + 1px));
+  }
+  .bar-fill {
+    position:absolute; top:0; left:0; height:100%; width:0%;
+    background: linear-gradient(90deg, var(--c-primary), var(--c-accent));
+    box-shadow: 0 0 var(--glow) var(--c-accent);
+    transition: width 1s cubic-bezier(.2,.8,.2,1);
+  }
+  /* Durchlaufender Lichtpunkt-Scan */
+  .bar-scan {
+    position:absolute; top:0; height:100%; width:60px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent);
+    filter: blur(1px);
+    animation: scan calc(2.4s / var(--speed)) linear infinite;
+  }
+  @keyframes scan { from { left:-60px; } to { left:100%; } }
+  .acc-scale { display:flex; justify-content:space-between; margin-top:6px;
+               font-size:10px; color: var(--c-primary); opacity:.7; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title">LINEAR ACCELERATOR</div>
+
+    <div class="acc-wrap">
+      <div class="acc-head">
+        <span class="acc-label" id="label">CHANNEL</span>
+        <span class="acc-value"><span id="val">0</span><small id="unit"></small></span>
+      </div>
+      <div class="bar-track">
+        <div class="bar-fill" id="fill"></div>
+        <!-- Scan läuft nur über den gefüllten Bereich -->
+        <div class="bar-scan" id="scan"></div>
+      </div>
+      <div class="acc-scale"><span id="min">0</span><span id="mid"></span><span id="max">100</span></div>
+    </div>
+    <div class="module-sub" id="sub">ACC</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  function pickGauge(data) {
+    var q = new URLSearchParams(location.search);
+    var gs = data.gauges || [];
+    if (q.has("gauge")) for (var i=0;i<gs.length;i++) if (gs[i].id===q.get("gauge")) return gs[i];
+    return gs[parseInt(q.get("index")||"1",10)] || gs[0] || {label:"—",value:0,min:0,max:100,unit:""};
+  }
+
+  OBS.loadData().then(function (data) {
+    var g = pickGauge(data);
+    var pct = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min || 1)));
+    document.getElementById("label").textContent = g.label || "CHANNEL";
+    document.getElementById("unit").textContent = g.unit || "";
+    document.getElementById("sub").textContent = (g.id || "ACC").toUpperCase();
+    document.getElementById("min").textContent = g.min;
+    document.getElementById("max").textContent = g.max;
+    document.getElementById("mid").textContent = Math.round((g.min + g.max) / 2);
+
+    // Scan-Bereich an Füllbreite koppeln
+    var fill = document.getElementById("fill");
+    requestAnimationFrame(function () {
+      fill.style.width = (pct * 100) + "%";
+      document.getElementById("scan").style.width = (pct * 100) + "%";
+      document.querySelector(".bar-scan").style.maxWidth = (pct*100)+"%";
+    });
+
+    // Wert hochzählen (Start über requestAnimationFrame, damit ts gesetzt ist)
+    var t0=null, dur=900;
+    function step(ts){ if(!t0)t0=ts; var k=Math.min(1,(ts-t0)/dur);
+      var e=1-Math.pow(1-k,3);
+      document.getElementById("val").textContent = Math.round(g.value*e);
+      if(k<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+})();
+</script>
+</body>
+</html>

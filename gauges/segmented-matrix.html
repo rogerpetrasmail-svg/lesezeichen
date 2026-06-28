@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     GAUGE 4 · "SEGMENTED MATRIX"
+     10 vertikale Blöcke. Aktive Blöcke leuchten, inaktive pulsieren im
+     ruhigen Atem-Effekt (breathing). Modular: jeder Block ist ein <rect>.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Segmented Matrix</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .matrix-value { font-size: 40px; font-weight: 700; text-anchor:middle; fill: var(--c-text); }
+  .matrix-unit  { font-size: 14px; text-anchor:middle; fill: var(--c-accent); }
+
+  .seg          { stroke: var(--c-primary); stroke-width: var(--line-width); rx: 2px; }
+  .seg.active   { fill: var(--c-primary); filter: drop-shadow(0 0 var(--glow) var(--c-accent)); }
+  /* Inaktive Blöcke: leere Füllung + Atem-Effekt */
+  .seg.idle     { fill: rgba(211,84,0,0.06);
+                  animation: breathe calc(3.2s / var(--speed)) ease-in-out infinite; }
+  @keyframes breathe { 0%,100%{opacity:.25} 50%{opacity:.6} }
+  /* leichte Versatz-Verzögerung für Wellen-Look (per nth-child) */
+  .seg.idle:nth-child(odd) { animation-delay: .4s; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title">SEGMENTED MATRIX</div>
+
+    <svg class="viz" viewBox="0 0 300 220" preserveAspectRatio="xMidYMid meet">
+      <g id="blocks"></g>
+      <text class="matrix-value" id="val" x="150" y="180">0</text>
+      <text class="matrix-unit"  id="unit" x="150" y="204"></text>
+    </svg>
+    <div class="module-sub" id="sub">MTX</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var COUNT = 10;
+
+  function pickGauge(data){
+    var q=new URLSearchParams(location.search), gs=data.gauges||[];
+    if(q.has("gauge")) for(var i=0;i<gs.length;i++) if(gs[i].id===q.get("gauge")) return gs[i];
+    return gs[parseInt(q.get("index")||"3",10)]||gs[0]||{label:"—",value:0,min:0,max:100,unit:""};
+  }
+
+  OBS.loadData().then(function (data) {
+    var g = pickGauge(data);
+    var pct = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min || 1)));
+    var activeN = Math.round(pct * COUNT);
+
+    document.getElementById("unit").textContent = g.unit || "";
+    document.getElementById("sub").textContent = (g.id || "MTX").toUpperCase();
+    document.querySelector(".module-title").textContent = g.label || "SEGMENTED MATRIX";
+
+    // 10 Blöcke bauen
+    var blocks = document.getElementById("blocks");
+    var w = 22, gap = 6, total = COUNT * w + (COUNT - 1) * gap;
+    var x0 = (300 - total) / 2;
+    for (var i = 0; i < COUNT; i++) {
+      var active = i < activeN;
+      var r = OBS.el("rect", {
+        class: "seg " + (active ? "active" : "idle"),
+        x: x0 + i * (w + gap), y: 30, width: w, height: 90,
+        rx: 2, fill: "none"
+      }, blocks);
+      // gestaffeltes Einblenden der aktiven Blöcke (In-Animation)
+      if (active) {
+        r.style.opacity = 0;
+        r.style.transition = "opacity .3s ease";
+        (function (el, d) { setTimeout(function(){ el.style.opacity = 1; }, d); })(r, i * 90);
+      }
+    }
+
+    // Wert hochzählen
+    var t0=null,dur=900;
+    function step(ts){ if(!t0)t0=ts; var k=Math.min(1,(ts-t0)/dur);
+      var e=1-Math.pow(1-k,3);
+      document.getElementById("val").textContent=Math.round(g.value*e);
+      if(k<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+})();
+</script>
+</body>
+</html>

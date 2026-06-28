@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     SCATTER 2 · "SIGNAL MATRIX"
+     Punktwolke im Pixel-Look: Werte werden auf ein Raster gequantelt und
+     als kleine Quadrate ("Pixel") dargestellt. Statisch: gestaffeltes
+     Einblenden, danach ruhig.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Scatter · Signal Matrix</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .grid line { stroke: var(--c-grid); stroke-width: 1; }
+  .pix { fill: var(--c-primary); opacity: 0;
+         animation: fade-in calc(.4s / var(--speed)) ease forwards;
+         filter: drop-shadow(0 0 calc(var(--glow) * .6) var(--c-accent)); }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">SIGNAL MATRIX</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g class="grid" id="grid"></g>
+      <g id="pixels"></g>
+    </svg>
+    <div class="module-sub" id="sub">SCATTER</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 26, r: 18, t: 24, b: 24 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+  var COLS = 22, ROWS = 14;     // Pixel-Raster
+
+  function render(data) {
+    var s = (data.series && data.series.scatter) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "SIGNAL MATRIX";
+
+    var cw = (px1 - px0) / COLS, ch = (py0 - py1) / ROWS;
+
+    // Rasterlinien
+    var grid = document.getElementById("grid");
+    for (var c = 0; c <= COLS; c++) OBS.el("line", { x1: px0 + c * cw, y1: py1, x2: px0 + c * cw, y2: py0 }, grid);
+    for (var r = 0; r <= ROWS; r++) OBS.el("line", { x1: px0, y1: py1 + r * ch, x2: px1, y2: py1 + r * ch }, grid);
+
+    var ex = OBS.extent(pts, function (d) { return d.x; });
+    var ey = OBS.extent(pts, function (d) { return d.y; });
+    var xs = OBS.scale(ex[0], ex[1] || 1, 0, COLS - 1);
+    var ys = OBS.scale(ey[0], ey[1] || 1, ROWS - 1, 0);
+
+    // Punkte auf Rasterzellen quanteln (Pixel-Look)
+    var g = document.getElementById("pixels");
+    var seen = {};
+    pts.forEach(function (p, i) {
+      var col = Math.round(xs(p.x)), row = Math.round(ys(p.y));
+      var key = col + ":" + row; if (seen[key]) return; seen[key] = 1;
+      var rect = OBS.el("rect", {
+        class: "pix", x: px0 + col * cw + 1.5, y: py1 + row * ch + 1.5,
+        width: cw - 3, height: ch - 3, rx: 1
+      }, g);
+      rect.style.animationDelay = (i * 0.04) + "s";
+    });
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

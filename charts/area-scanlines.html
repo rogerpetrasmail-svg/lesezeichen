@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     AREA 2 · "SCANLINES"
+     Flächendiagramm, dessen Füllung von horizontalen TV-Scanlines
+     durchzogen ist. Statisch: einmaliges Einfahren der Fläche.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Area · Scanlines</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .top-line { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
+              stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+              animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  /* Fläche wird durch clip-path einmalig "aufgewischt" */
+  .area-clip rect { animation: wipe calc(1.5s / var(--speed)) ease-out forwards; }
+  @keyframes wipe { from { width: 0; } to { width: 400px; } }
+  .axis     { stroke: var(--c-grid); stroke-width: 1; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">SCANLINES</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <!-- TV-Scanline-Muster: dünne horizontale Linien -->
+        <pattern id="scanPat" width="4" height="4" patternUnits="userSpaceOnUse">
+          <rect width="4" height="4" fill="var(--c-primary)" opacity="0.30"/>
+          <line x1="0" y1="0" x2="4" y2="0" stroke="var(--c-accent)" stroke-width="1" opacity="0.55"/>
+        </pattern>
+        <!-- Wisch-Clip für die In-Animation -->
+        <clipPath id="areaClip" class="area-clip"><rect x="0" y="0" width="0" height="260"/></clipPath>
+      </defs>
+      <g id="axis"></g>
+      <path id="area" fill="url(#scanPat)" clip-path="url(#areaClip)"/>
+      <path class="top-line" id="line"/>
+    </svg>
+    <div class="module-sub" id="sub">AREA</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 26, r: 18, t: 24, b: 26 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+
+  function render(data) {
+    var s = (data.series && data.series.area) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "SCANLINES";
+
+    var xs = OBS.scale(0, pts.length - 1 || 1, px0, px1);
+    var ext = OBS.extent(pts, function (d) { return d.y; });
+    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
+
+    var ax = document.getElementById("axis");
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
+
+    var top = pts.map(function (p, i) { return (i ? "L" : "M") + xs(i) + " " + ys(p.y); }).join(" ");
+    var area = top + " L" + xs(pts.length - 1) + " " + py0 + " L" + xs(0) + " " + py0 + " Z";
+    document.getElementById("area").setAttribute("d", area);
+    var line = document.getElementById("line");
+    line.setAttribute("d", top);
+    line.style.setProperty("--len", OBS.pathLen(line));
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

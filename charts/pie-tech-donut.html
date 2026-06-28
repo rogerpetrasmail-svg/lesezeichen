@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     PIE 1 · "TECH DONUT"
+     Donut mit Zentralwert (Summe / Hauptanteil). Statisch: Segmente
+     wachsen einmalig per Stroke-Dash-Animation ein.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Pie · Tech Donut</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .seg { fill: none; stroke-width: 26px;
+         stroke-dasharray: 0 1000; transition: none; }
+  .seg.animate { animation: grow calc(1.2s / var(--speed)) ease-out forwards; }
+  @keyframes grow { from { stroke-dashoffset: var(--len); } to { stroke-dashoffset: 0; } }
+  .center-val { font-size: 42px; font-weight: 700; text-anchor: middle; fill: var(--c-text); }
+  .center-lbl { font-size: 12px; text-anchor: middle; fill: var(--c-accent); letter-spacing: 2px; }
+  .legend text { fill: var(--c-text); font-size: 11px; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">TECH DONUT</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g id="ring" transform="translate(130,130)"></g>
+      <text class="center-val" id="cval" x="130" y="128">0</text>
+      <text class="center-lbl" id="clbl" x="130" y="150">TOTAL</text>
+      <g class="legend" id="legend"></g>
+    </svg>
+    <div class="module-sub" id="sub">PIE</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var R = 80, C = 2 * Math.PI * R;
+
+  // Farbabstufungen aus primary/accent (über Opacity) – modular gehalten
+  function shade(i, n) { return 0.45 + 0.55 * (1 - i / Math.max(1, n - 1)); }
+
+  function render(data) {
+    var s = (data.series && data.series.pie) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "TECH DONUT";
+
+    var total = pts.reduce(function (a, p) { return a + p.y; }, 0) || 1;
+    var ring = document.getElementById("ring");
+    var legend = document.getElementById("legend");
+    var offset = 0;
+
+    pts.forEach(function (p, i) {
+      var frac = p.y / total;
+      var c = OBS.el("circle", {
+        class: "seg animate", r: R, cx: 0, cy: 0,
+        stroke: i % 2 ? "var(--c-accent)" : "var(--c-primary)",
+        "stroke-dasharray": (C * frac) + " " + C,
+        transform: "rotate(" + (offset * 360 - 90) + ")"
+      }, ring);
+      c.style.opacity = shade(i, pts.length);
+      c.style.setProperty("--len", C * frac);
+      c.style.animationDelay = (i * 0.18) + "s";
+      offset += frac;
+
+      // Legende rechts
+      var ly = 70 + i * 24;
+      OBS.el("rect", { x: 285, y: ly - 9, width: 11, height: 11, rx: 2,
+        fill: i % 2 ? "var(--c-accent)" : "var(--c-primary)", opacity: shade(i, pts.length) }, legend);
+      OBS.el("text", { x: 302, y: ly }, legend).textContent =
+        p.label + "  " + Math.round(frac * 100) + "%";
+    });
+
+    // Zentralwert = Gesamtsumme, einmalig hochzählen
+    var t0=null,dur=1000;
+    function step(ts){ if(!t0)t0=ts; var k=Math.min(1,(ts-t0)/dur);
+      var e=1-Math.pow(1-k,3);
+      document.getElementById("cval").textContent=Math.round(total*e);
+      if(k<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

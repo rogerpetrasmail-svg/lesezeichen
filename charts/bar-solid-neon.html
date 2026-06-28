@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     BAR 1 · "SOLID NEON"
+     Solide Balken mit sanftem Neon-Glow. Statisch: Balken fahren einmalig
+     von unten hoch (rise-in), danach ruhiges Bild.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Bar · Solid Neon</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .bar      { fill: var(--c-primary); filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+              transform-origin: bottom; animation: rise-in calc(.9s / var(--speed)) cubic-bezier(.2,.8,.2,1) forwards; }
+  .bar-cap  { fill: var(--c-accent); }
+  .axis     { stroke: var(--c-grid); stroke-width: 1; }
+  .blabel   { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity: .85; }
+  .bval     { fill: var(--c-accent); font-size: 11px; text-anchor: middle; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">SOLID NEON</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g id="axis"></g>
+      <g id="bars"></g>
+    </svg>
+    <div class="module-sub" id="sub">BAR</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 30, r: 20, t: 24, b: 34 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+
+  function render(data) {
+    var s = (data.series && data.series.bar) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "SOLID NEON";
+
+    var ext = OBS.extent(pts, function (d) { return d.y; });
+    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
+    var n = pts.length, slot = (px1 - px0) / n, bw = slot * 0.55;
+
+    // Grundlinie
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
+
+    var g = document.getElementById("bars");
+    pts.forEach(function (p, i) {
+      var x = px0 + slot * i + (slot - bw) / 2;
+      var h = py0 - ys(p.y);
+      var bar = OBS.el("rect", { class: "bar", x: x, y: ys(p.y), width: bw, height: h, rx: 2 }, g);
+      bar.style.animationDelay = (i * 0.08) + "s";
+      // heller Kopf-Balken
+      OBS.el("rect", { class: "bar-cap", x: x, y: ys(p.y), width: bw, height: 3, rx: 1 }, g);
+      OBS.el("text", { class: "blabel", x: x + bw / 2, y: py0 + 16 }, g).textContent = p.label;
+      OBS.el("text", { class: "bval",   x: x + bw / 2, y: ys(p.y) - 6 }, g).textContent = p.y;
+    });
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

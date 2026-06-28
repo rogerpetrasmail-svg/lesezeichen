@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     RADAR 2 · "SONAR SCAN"
+     Radar mit konzentrischen Kreisen + langsam rotierendem Sonar-Strahl.
+     Statisch fürs Datenbild (Polygon faded einmalig ein), nur der dezente
+     Sonar-Sweep läuft weiter (an --speed gekoppelt).
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Radar · Sonar Scan</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .ring   { stroke: var(--c-grid); stroke-width: 1; fill: none; }
+  .spoke  { stroke: var(--c-grid); stroke-width: 1; }
+  .data   { stroke: var(--c-primary); stroke-width: var(--line-width);
+            fill: var(--c-primary); fill-opacity: .22;
+            opacity: 0; animation: fade-in calc(1s / var(--speed)) ease forwards .3s; }
+  .vertex { fill: var(--c-accent); }
+  .alabel { fill: var(--c-text); font-size: 11px; text-anchor: middle; }
+  /* rotierender Sonar-Strahl */
+  .sweep  { transform-origin: 200px 130px; animation: sweep calc(5s / var(--speed)) linear infinite; }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">SONAR SCAN</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="sonarGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="var(--c-accent)" stop-opacity="0.45"/>
+          <stop offset="100%" stop-color="var(--c-accent)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g id="rings"></g>
+      <!-- Sonar-Keil -->
+      <path class="sweep" d="M200 130 L200 35 A95 95 0 0 1 285 95 Z" fill="url(#sonarGrad)"/>
+      <polygon class="data" id="data"/>
+      <g id="vertices"></g>
+      <g id="labels"></g>
+    </svg>
+    <div class="module-sub" id="sub">RADAR</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var CX = 200, CY = 130, R = 95;
+
+  function render(data) {
+    var s = (data.series && data.series.radar) || { axes: [] };
+    var axes = s.axes || [];
+    document.getElementById("title").textContent = s.label || "SONAR SCAN";
+
+    var n = axes.length || 5;
+    var max = OBS.extent(axes, function (d) { return d.y; })[1] || 100;
+    function ang(i) { return i / n * 360; }
+
+    // konzentrische Kreise
+    var rings = document.getElementById("rings");
+    [0.25, 0.5, 0.75, 1].forEach(function (f) {
+      OBS.el("circle", { class: "ring", cx: CX, cy: CY, r: R * f }, rings);
+    });
+    var labels = document.getElementById("labels");
+    for (var i = 0; i < n; i++) {
+      var v = OBS.polar(CX, CY, R, ang(i));
+      OBS.el("line", { class: "spoke", x1: CX, y1: CY, x2: v.x, y2: v.y }, rings);
+      var lp = OBS.polar(CX, CY, R + 16, ang(i));
+      OBS.el("text", { class: "alabel", x: lp.x, y: lp.y + 4 }, labels).textContent = (axes[i] && axes[i].label) || ("A" + i);
+    }
+
+    var pts = [], vg = document.getElementById("vertices");
+    for (var j = 0; j < n; j++) {
+      var r = R * (axes[j].y / max);
+      var v2 = OBS.polar(CX, CY, r, ang(j));
+      pts.push(v2.x + "," + v2.y);
+      OBS.el("circle", { class: "vertex", cx: v2.x, cy: v2.y, r: 3 }, vg);
+    }
+    document.getElementById("data").setAttribute("points", pts.join(" "));
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     LINE 1 · "DIGITAL GRID"
+     Liniendiagramm mit Punktraster-Hintergrund. Statisches Bild fürs
+     Video: nur EINE In-Animation (Linie zeichnet sich einmalig).
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Line · Digital Grid</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .data-line { stroke: var(--c-primary); stroke-width: var(--line-width); fill: none;
+               filter: drop-shadow(0 0 var(--glow) var(--c-accent)); }
+  .node      { fill: var(--c-accent); }
+  .dot-grid circle { fill: var(--c-grid); }
+  .axis      { stroke: var(--c-grid); stroke-width: 1; }
+  /* einmalige Zeichen-Animation */
+  .data-line { stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+               animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .node      { opacity: 0; animation: fade-in .4s ease forwards; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">DIGITAL GRID</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <g class="dot-grid" id="grid"></g>
+      <g class="axis-g"   id="axis"></g>
+      <path class="data-line" id="line"/>
+      <g id="nodes"></g>
+    </svg>
+    <div class="module-sub" id="sub">LINE</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 30, r: 20, t: 24, b: 28 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+
+  function render(data) {
+    var s = (data.series && data.series.line) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "DIGITAL GRID";
+
+    var xs = OBS.scale(0, pts.length - 1 || 1, px0, px1);
+    var ext = OBS.extent(pts, function (d) { return d.y; });
+    var ys = OBS.scale(Math.min(0, ext[0]), ext[1] || 1, py0, py1);
+
+    // Punktraster
+    var grid = document.getElementById("grid");
+    for (var gx = px0; gx <= px1; gx += 18)
+      for (var gy = py1; gy <= py0; gy += 18)
+        OBS.el("circle", { cx: gx, cy: gy, r: 1 }, grid);
+
+    // Achsen
+    var ax = document.getElementById("axis");
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
+    OBS.el("line", { class: "axis", x1: px0, y1: py1, x2: px0, y2: py0 }, ax);
+
+    // Linien-Pfad
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + xs(i) + " " + ys(p.y); }).join(" ");
+    var line = document.getElementById("line");
+    line.setAttribute("d", d);
+    var len = OBS.pathLen(line);
+    line.style.setProperty("--len", len);
+
+    // Knotenpunkte
+    var nodes = document.getElementById("nodes");
+    pts.forEach(function (p, i) {
+      var c = OBS.el("circle", { class: "node", cx: xs(i), cy: ys(p.y), r: 3 }, nodes);
+      c.style.animationDelay = (0.6 + i * 0.12) + "s";
+    });
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<!-- =====================================================================
+     AREA 1 · "GLOW FILL"
+     Flächendiagramm mit Verlaufsfüllung, die nach unten verblasst.
+     Statisch: Linie zeichnet sich, Fläche fadet einmalig ein.
+     ===================================================================== -->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Area · Glow Fill</title>
+<link rel="stylesheet" href="../shared/obs-core.css">
+<style>
+  .top-line { stroke: var(--c-primary); stroke-width: var(--line-width); fill: none;
+              filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+              stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+              animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .area     { opacity: 0; animation: fade-in calc(1.4s / var(--speed)) ease forwards; animation-delay: .4s; }
+  .axis     { stroke: var(--c-grid); stroke-width: 1; }
+</style>
+</head>
+<body>
+  <div class="obs-module">
+    <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
+    <div class="module-title" id="title">GLOW FILL</div>
+    <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <!-- Verlauf: oben kräftig, unten verblassend -->
+        <linearGradient id="glowGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stop-color="var(--c-primary)" stop-opacity="0.65"/>
+          <stop offset="100%" stop-color="var(--c-primary)" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <g id="axis"></g>
+      <path class="area" id="area" fill="url(#glowGrad)"/>
+      <path class="top-line" id="line"/>
+    </svg>
+    <div class="module-sub" id="sub">AREA</div>
+  </div>
+
+<script src="../shared/obs-core.js"></script>
+<script>
+(function () {
+  var M = { l: 26, r: 18, t: 24, b: 26 }, W = 400, H = 260;
+  var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
+
+  function render(data) {
+    var s = (data.series && data.series.area) || { points: [] };
+    var pts = s.points || [];
+    document.getElementById("title").textContent = s.label || "GLOW FILL";
+
+    var xs = OBS.scale(0, pts.length - 1 || 1, px0, px1);
+    var ext = OBS.extent(pts, function (d) { return d.y; });
+    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
+
+    var ax = document.getElementById("axis");
+    for (var k = 0; k <= 3; k++) { var gy = py1 + (py0 - py1) * k / 3;
+      OBS.el("line", { class: "axis", x1: px0, y1: gy, x2: px1, y2: gy }, ax); }
+
+    var top = pts.map(function (p, i) { return (i ? "L" : "M") + xs(i) + " " + ys(p.y); }).join(" ");
+    var area = top + " L" + xs(pts.length - 1) + " " + py0 + " L" + xs(0) + " " + py0 + " Z";
+    document.getElementById("area").setAttribute("d", area);
+    var line = document.getElementById("line");
+    line.setAttribute("d", top);
+    line.style.setProperty("--len", OBS.pathLen(line));
+  }
+  OBS.loadData().then(render);
+})();
+</script>
+</body>
+</html>
