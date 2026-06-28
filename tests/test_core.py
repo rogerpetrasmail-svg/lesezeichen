@@ -109,4 +109,4 @@ if __name__ == "__main__":
     test_excel_export_and_recovery()
     test_normalize_result_clamps_score()
     test_ollama_json_parsing()
-    print("\nAlle Tests bestanden ✅")
+    print("\nAlle Tests bestanden.")

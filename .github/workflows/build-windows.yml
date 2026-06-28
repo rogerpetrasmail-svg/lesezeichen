@@ -19,6 +19,12 @@ jobs:
   build:
     runs-on: windows-latest
 
+    # UTF-8 erzwingen, damit Unicode-Ausgaben auf der Windows-Konsole (cp1252)
+    # keinen UnicodeEncodeError auslösen.
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+
     steps:
       - name: Repository auschecken
         uses: actions/checkout@v4
