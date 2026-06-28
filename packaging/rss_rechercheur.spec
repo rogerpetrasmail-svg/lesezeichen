@@ -11,15 +11,20 @@ import os
 
 block_cipher = None
 
-# Pfad zum Projekt-Wurzelverzeichnis (eine Ebene über packaging/)
-ROOT = os.path.abspath(os.path.join(os.getcwd()))
+# SPECPATH wird von PyInstaller injiziert und zeigt auf das Verzeichnis dieser
+# .spec-Datei (packaging/). Das Projekt-Wurzelverzeichnis liegt eine Ebene
+# darüber. Alle Pfade werden absolut gemacht, da PyInstaller relative
+# Script-Pfade relativ zur .spec-Datei – nicht zum Arbeitsverzeichnis – auflöst.
+ROOT = os.path.dirname(os.path.abspath(SPECPATH))
 
-icon_path = os.path.join("packaging", "app.ico")
+icon_path = os.path.join(ROOT, "packaging", "app.ico")
 if not os.path.exists(icon_path):
     icon_path = None
 
+version_path = os.path.join(ROOT, "packaging", "version_info.txt")
+
 a = Analysis(
-    ["run.py"],
+    [os.path.join(ROOT, "run.py")],
     pathex=[ROOT],
     binaries=[],
     datas=[],
@@ -53,7 +58,7 @@ exe = EXE(
     console=False,  # GUI-Anwendung: kein Konsolenfenster
     disable_windowed_traceback=False,
     icon=icon_path,
-    version=os.path.join("packaging", "version_info.txt"),
+    version=version_path,
 )
 
 coll = COLLECT(
