@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     RADAR 2 · "SONAR SCAN"
-     Radar mit konzentrischen Kreisen + langsam rotierendem Sonar-Strahl.
-     Statisch fürs Datenbild (Polygon faded einmalig ein), nur der dezente
-     Sonar-Sweep läuft weiter (an --speed gekoppelt).
+     RADAR 2 · "SONAR SCAN"  (Multi-Serien)
+     Konzentrische Kreise + rotierender Sonar-Strahl. Pro Datenreihe ein
+     Polygon in Serienfarbe. Gemeinsame Skala. Polygone faden einmalig ein,
+     nur der dezente Sweep läuft weiter (an --speed gekoppelt).
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -11,15 +11,13 @@
 <title>Radar · Sonar Scan</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .ring   { stroke: var(--c-grid); stroke-width: 1; fill: none; }
-  .spoke  { stroke: var(--c-grid); stroke-width: 1; }
-  .data   { stroke: var(--c-primary); stroke-width: var(--line-width);
-            fill: var(--c-primary); fill-opacity: .22;
-            opacity: 0; animation: fade-in calc(1s / var(--speed)) ease forwards .3s; }
-  .vertex { fill: var(--c-accent); }
-  .alabel { fill: var(--c-text); font-size: 11px; text-anchor: middle; }
-  /* rotierender Sonar-Strahl */
-  .sweep  { transform-origin: 200px 130px; animation: sweep calc(5s / var(--speed)) linear infinite; }
+  .ring  { stroke: var(--c-grid); stroke-width: 1; fill: none; }
+  .spoke { stroke: var(--c-grid); stroke-width: 1; }
+  .data  { stroke-width: var(--line-width); fill-opacity: .16;
+           opacity: 0; animation: fade-in calc(1s / var(--speed)) ease forwards; }
+  .alabel { fill: var(--c-text); font-size: 10px; text-anchor: middle; }
+  .lg-txt { fill: var(--c-text); font-size: 10px; }
+  .sweep { transform-origin: 200px 130px; animation: sweep calc(5s / var(--speed)) linear infinite; }
   @keyframes sweep { to { transform: rotate(360deg); } }
 </style>
 </head>
@@ -35,11 +33,10 @@
         </linearGradient>
       </defs>
       <g id="rings"></g>
-      <!-- Sonar-Keil -->
-      <path class="sweep" d="M200 130 L200 35 A95 95 0 0 1 285 95 Z" fill="url(#sonarGrad)"/>
-      <polygon class="data" id="data"/>
-      <g id="vertices"></g>
+      <path class="sweep" d="M200 130 L200 38 A92 92 0 0 1 282 96 Z" fill="url(#sonarGrad)"/>
+      <g id="polys"></g>
       <g id="labels"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">RADAR</div>
   </div>
@@ -47,40 +44,43 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var CX = 200, CY = 130, R = 95;
+  var CX = 200, CY = 130, R = 92;
 
-  function render(data) {
-    var s = (data.series && data.series.radar) || { axes: [] };
-    var axes = s.axes || [];
-    document.getElementById("title").textContent = s.label || "SONAR SCAN";
-
-    var n = axes.length || 5;
-    var max = OBS.extent(axes, function (d) { return d.y; })[1] || 100;
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "SONAR SCAN";
+    var labels = sheet.labels, n = labels.length || 3;
+    var max = sheet.max || 1;
     function ang(i) { return i / n * 360; }
 
-    // konzentrische Kreise
     var rings = document.getElementById("rings");
-    [0.25, 0.5, 0.75, 1].forEach(function (f) {
-      OBS.el("circle", { class: "ring", cx: CX, cy: CY, r: R * f }, rings);
-    });
-    var labels = document.getElementById("labels");
+    [0.25, 0.5, 0.75, 1].forEach(function (f) { OBS.el("circle", { class: "ring", cx: CX, cy: CY, r: R * f }, rings); });
+    var lab = document.getElementById("labels");
     for (var i = 0; i < n; i++) {
       var v = OBS.polar(CX, CY, R, ang(i));
       OBS.el("line", { class: "spoke", x1: CX, y1: CY, x2: v.x, y2: v.y }, rings);
-      var lp = OBS.polar(CX, CY, R + 16, ang(i));
-      OBS.el("text", { class: "alabel", x: lp.x, y: lp.y + 4 }, labels).textContent = (axes[i] && axes[i].label) || ("A" + i);
+      var lp = OBS.polar(CX, CY, R + 15, ang(i));
+      OBS.el("text", { class: "alabel", x: lp.x, y: lp.y + 4 }, lab).textContent = labels[i] || ("A" + i);
     }
 
-    var pts = [], vg = document.getElementById("vertices");
-    for (var j = 0; j < n; j++) {
-      var r = R * (axes[j].y / max);
-      var v2 = OBS.polar(CX, CY, r, ang(j));
-      pts.push(v2.x + "," + v2.y);
-      OBS.el("circle", { class: "vertex", cx: v2.x, cy: v2.y, r: 3 }, vg);
-    }
-    document.getElementById("data").setAttribute("points", pts.join(" "));
+    var polys = document.getElementById("polys"), lg = document.getElementById("legend");
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      var pts = [];
+      for (var j = 0; j < n; j++) {
+        var r = R * ((se.values[j] || 0) / max);
+        var p = OBS.polar(CX, CY, r, ang(j));
+        pts.push(p.x + "," + p.y);
+      }
+      var poly = OBS.el("polygon", { class: "data", points: pts.join(" "),
+        stroke: st.color, fill: st.color, opacity: st.opacity,
+        "stroke-dasharray": st.dash === "none" ? "" : st.dash }, polys);
+      poly.style.animationDelay = (0.3 + si * 0.18) + "s";
+
+      OBS.el("rect", { x: 14, y: 20 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: 27, y: 28 + si * 13 }, lg).textContent = se.name;
+    });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

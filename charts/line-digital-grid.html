@@ -1,8 +1,15 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     LINE 1 · "DIGITAL GRID"
-     Liniendiagramm mit Punktraster-Hintergrund. Statisches Bild fürs
-     Video: nur EINE In-Animation (Linie zeichnet sich einmalig).
+     LINE 1 · "DIGITAL GRID"  (Multi-Serien-Referenz)
+     ---------------------------------------------------------------------
+     Liniendiagramm mit Punktraster. Liest das aktive Sheet (?sheet=) und
+     zeichnet für JEDE Datenreihe (Var 1, Var 2 ...) eine eigene Linie.
+       - Reihe 0  -> var(--c-primary)   (an Customizer gekoppelt)
+       - Reihe 1  -> var(--c-accent)
+       - Reihe 2  -> var(--c-text)
+       - ab Reihe 3 -> Farben wiederholen sich mit Strich-Muster
+     Y-Skala = globales Min/Max ÜBER ALLE Reihen (keine Linie bricht aus).
+     Statisch fürs Video: einmalige Zeichen-In-Animation pro Linie.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,15 +17,14 @@
 <title>Line · Digital Grid</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .data-line { stroke: var(--c-primary); stroke-width: var(--line-width); fill: none;
-               filter: drop-shadow(0 0 var(--glow) var(--c-accent)); }
-  .node      { fill: var(--c-accent); }
   .dot-grid circle { fill: var(--c-grid); }
-  .axis      { stroke: var(--c-grid); stroke-width: 1; }
-  /* einmalige Zeichen-Animation */
-  .data-line { stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
-               animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
-  .node      { opacity: 0; animation: fade-in .4s ease forwards; }
+  .axis  { stroke: var(--c-grid); stroke-width: 1; }
+  /* Linien werden per JS gefärbt; Animation hängt am globalen --speed.   */
+  .series-line { fill: none; stroke-width: var(--line-width);
+                 stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+                 animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .node  { opacity: 0; animation: fade-in .4s ease forwards; }
+  .lg-txt { fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -27,9 +33,10 @@
     <div class="module-title" id="title">DIGITAL GRID</div>
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
       <g class="dot-grid" id="grid"></g>
-      <g class="axis-g"   id="axis"></g>
-      <path class="data-line" id="line"/>
+      <g id="axis"></g>
+      <g id="series"></g>
       <g id="nodes"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">LINE</div>
   </div>
@@ -37,17 +44,17 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 20, t: 24, b: 28 }, W = 400, H = 260;
+  var M = { l: 30, r: 20, t: 26, b: 28 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.line) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "DIGITAL GRID";
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "DIGITAL GRID";
+    var labels = sheet.labels, n = labels.length || 1;
 
-    var xs = OBS.scale(0, pts.length - 1 || 1, px0, px1);
-    var ext = OBS.extent(pts, function (d) { return d.y; });
-    var ys = OBS.scale(Math.min(0, ext[0]), ext[1] || 1, py0, py1);
+    // gemeinsame Skala: 0-Basis bis globales Max über ALLE Reihen
+    var lo = Math.min(0, sheet.min), hi = sheet.max || 1;
+    var xs = OBS.scale(0, n - 1, px0, px1);
+    var ys = OBS.scale(lo, hi, py0, py1);
 
     // Punktraster
     var grid = document.getElementById("grid");
@@ -60,21 +67,42 @@
     OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
     OBS.el("line", { class: "axis", x1: px0, y1: py1, x2: px0, y2: py0 }, ax);
 
-    // Linien-Pfad
-    var d = pts.map(function (p, i) { return (i ? "L" : "M") + xs(i) + " " + ys(p.y); }).join(" ");
-    var line = document.getElementById("line");
-    line.setAttribute("d", d);
-    var len = OBS.pathLen(line);
-    line.style.setProperty("--len", len);
+    // eine Linie + Knoten je Datenreihe
+    var sg = document.getElementById("series"), ng = document.getElementById("nodes");
+    var lg = document.getElementById("legend");
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      var d = se.values.map(function (v, i) { return (i ? "L" : "M") + xs(i) + " " + ys(v); }).join(" ");
+      var path = OBS.el("path", {
+        class: "series-line", d: d,
+        stroke: st.color, "stroke-dasharray": st.dash === "none" ? "" : st.dash,
+        opacity: st.opacity
+      }, sg);
+      // Zeichen-Animation (stroke-dash) – Dash-Muster getrennt via --len
+      var len = OBS.pathLen(path);
+      path.style.setProperty("--len", len);
+      path.style.animationDelay = (si * 0.25) + "s";
 
-    // Knotenpunkte
-    var nodes = document.getElementById("nodes");
-    pts.forEach(function (p, i) {
-      var c = OBS.el("circle", { class: "node", cx: xs(i), cy: ys(p.y), r: 3 }, nodes);
-      c.style.animationDelay = (0.6 + i * 0.12) + "s";
+      // Knotenpunkte
+      se.values.forEach(function (v, i) {
+        var c = OBS.el("circle", { class: "node", cx: xs(i), cy: ys(v), r: 2.4, fill: st.color }, ng);
+        c.style.opacity = 0; c.style.animationDelay = (0.6 + si * 0.25 + i * 0.06) + "s";
+      });
+
+      // Legende
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
+    });
+
+    // X-Beschriftung (erste/mittlere/letzte – Übersicht)
+    [0, Math.floor(n / 2), n - 1].forEach(function (i) {
+      if (labels[i] === undefined) return;
+      OBS.el("text", { class: "lg-txt", x: xs(i), y: py0 + 16, "text-anchor": "middle" }, document.getElementById("axis"))
+        .textContent = labels[i];
     });
   }
-  OBS.loadData().then(render);
+
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

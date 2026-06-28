@@ -1,4 +1,5 @@
-{
+/* Auto-generiert von export_data.py – nicht von Hand ändern. */
+window.OBS_DATA = {
   "meta": {
     "source": "dummy",
     "sheets_found": [
@@ -174,4 +175,4 @@
       }
     }
   }
-}
+};

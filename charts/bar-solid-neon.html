@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     BAR 1 · "SOLID NEON"
-     Solide Balken mit sanftem Neon-Glow. Statisch: Balken fahren einmalig
-     von unten hoch (rise-in), danach ruhiges Bild.
+     BAR 1 · "SOLID NEON"  (Multi-Serien, gruppiert)
+     Pro Label eine Gruppe nebeneinander stehender Balken – einer je
+     Datenreihe. Glow + einmalige rise-in Animation.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,12 +10,11 @@
 <title>Bar · Solid Neon</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .bar      { fill: var(--c-primary); filter: drop-shadow(0 0 var(--glow) var(--c-accent));
-              transform-origin: bottom; animation: rise-in calc(.9s / var(--speed)) cubic-bezier(.2,.8,.2,1) forwards; }
-  .bar-cap  { fill: var(--c-accent); }
-  .axis     { stroke: var(--c-grid); stroke-width: 1; }
-  .blabel   { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity: .85; }
-  .bval     { fill: var(--c-accent); font-size: 11px; text-anchor: middle; font-weight: 700; }
+  .axis  { stroke: var(--c-grid); stroke-width: 1; }
+  .bar   { transform-origin: bottom; filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+           animation: rise-in calc(.9s / var(--speed)) cubic-bezier(.2,.8,.2,1) forwards; }
+  .blabel{ fill: var(--c-text); font-size: 10px; text-anchor: middle; opacity: .85; }
+  .lg-txt{ fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -25,6 +24,7 @@
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
       <g id="axis"></g>
       <g id="bars"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">BAR</div>
   </div>
@@ -32,34 +32,40 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 20, t: 24, b: 34 }, W = 400, H = 260;
+  var M = { l: 30, r: 20, t: 26, b: 32 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.bar) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "SOLID NEON";
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "SOLID NEON";
+    var n = sheet.labels.length || 1, s = sheet.seriesCount || 1;
+    var hi = sheet.max || 1;
+    var ys = OBS.scale(0, hi, py0, py1);
+    var slot = (px1 - px0) / n, group = slot * 0.72, bw = group / s;
 
-    var ext = OBS.extent(pts, function (d) { return d.y; });
-    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
-    var n = pts.length, slot = (px1 - px0) / n, bw = slot * 0.55;
-
-    // Grundlinie
     OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
 
-    var g = document.getElementById("bars");
-    pts.forEach(function (p, i) {
-      var x = px0 + slot * i + (slot - bw) / 2;
-      var h = py0 - ys(p.y);
-      var bar = OBS.el("rect", { class: "bar", x: x, y: ys(p.y), width: bw, height: h, rx: 2 }, g);
-      bar.style.animationDelay = (i * 0.08) + "s";
-      // heller Kopf-Balken
-      OBS.el("rect", { class: "bar-cap", x: x, y: ys(p.y), width: bw, height: 3, rx: 1 }, g);
-      OBS.el("text", { class: "blabel", x: x + bw / 2, y: py0 + 16 }, g).textContent = p.label;
-      OBS.el("text", { class: "bval",   x: x + bw / 2, y: ys(p.y) - 6 }, g).textContent = p.y;
+    var bars = document.getElementById("bars"), lg = document.getElementById("legend");
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      se.values.forEach(function (v, i) {
+        var x = px0 + slot * i + (slot - group) / 2 + si * bw;
+        var bar = OBS.el("rect", {
+          class: "bar", x: x, y: ys(v), width: Math.max(1, bw - 1.5), height: py0 - ys(v),
+          rx: 1.5, fill: st.color, opacity: st.opacity
+        }, bars);
+        bar.style.animationDelay = (i * 0.05 + si * 0.04) + "s";
+      });
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
+    });
+
+    // Kategorie-Labels
+    sheet.labels.forEach(function (lab, i) {
+      if (n > 8 && i % 2) return; // bei vielen Labels ausdünnen
+      OBS.el("text", { class: "blabel", x: px0 + slot * i + slot / 2, y: py0 + 14 }, bars).textContent = lab;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

@@ -1,9 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     SCATTER 2 · "SIGNAL MATRIX"
-     Punktwolke im Pixel-Look: Werte werden auf ein Raster gequantelt und
-     als kleine Quadrate ("Pixel") dargestellt. Statisch: gestaffeltes
-     Einblenden, danach ruhig.
+     SCATTER 2 · "SIGNAL MATRIX"  (Multi-Serien, Pixel-Look)
+     Werte (X = Label-Index, Y = Wert) auf ein Raster gequantelt und als
+     "Pixel" dargestellt. Jede Datenreihe in eigener Farbe. Einblenden.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -12,9 +11,9 @@
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
   .grid line { stroke: var(--c-grid); stroke-width: 1; }
-  .pix { fill: var(--c-primary); opacity: 0;
-         animation: fade-in calc(.4s / var(--speed)) ease forwards;
+  .pix { opacity: 0; animation: fade-in calc(.4s / var(--speed)) ease forwards;
          filter: drop-shadow(0 0 calc(var(--glow) * .6) var(--c-accent)); }
+  .lg-txt { fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -24,6 +23,7 @@
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
       <g class="grid" id="grid"></g>
       <g id="pixels"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">SCATTER</div>
   </div>
@@ -31,41 +31,39 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 26, r: 18, t: 24, b: 24 }, W = 400, H = 260;
+  var M = { l: 26, r: 18, t: 26, b: 24 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
-  var COLS = 22, ROWS = 14;     // Pixel-Raster
+  var COLS = 22, ROWS = 14;
 
-  function render(data) {
-    var s = (data.series && data.series.scatter) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "SIGNAL MATRIX";
-
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "SIGNAL MATRIX";
+    var n = sheet.labels.length || 1;
     var cw = (px1 - px0) / COLS, ch = (py0 - py1) / ROWS;
 
-    // Rasterlinien
     var grid = document.getElementById("grid");
     for (var c = 0; c <= COLS; c++) OBS.el("line", { x1: px0 + c * cw, y1: py1, x2: px0 + c * cw, y2: py0 }, grid);
     for (var r = 0; r <= ROWS; r++) OBS.el("line", { x1: px0, y1: py1 + r * ch, x2: px1, y2: py1 + r * ch }, grid);
 
-    var ex = OBS.extent(pts, function (d) { return d.x; });
-    var ey = OBS.extent(pts, function (d) { return d.y; });
-    var xs = OBS.scale(ex[0], ex[1] || 1, 0, COLS - 1);
-    var ys = OBS.scale(ey[0], ey[1] || 1, ROWS - 1, 0);
+    var lo = Math.min(0, sheet.min), hi = sheet.max || 1;
+    var xs = OBS.scale(0, n - 1, 0, COLS - 1);
+    var ys = OBS.scale(lo, hi, ROWS - 1, 0);
 
-    // Punkte auf Rasterzellen quanteln (Pixel-Look)
-    var g = document.getElementById("pixels");
-    var seen = {};
-    pts.forEach(function (p, i) {
-      var col = Math.round(xs(p.x)), row = Math.round(ys(p.y));
-      var key = col + ":" + row; if (seen[key]) return; seen[key] = 1;
-      var rect = OBS.el("rect", {
-        class: "pix", x: px0 + col * cw + 1.5, y: py1 + row * ch + 1.5,
-        width: cw - 3, height: ch - 3, rx: 1
-      }, g);
-      rect.style.animationDelay = (i * 0.04) + "s";
+    var g = document.getElementById("pixels"), lg = document.getElementById("legend"), pi = 0;
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      se.values.forEach(function (v, i) {
+        var col = Math.round(xs(i)), row = Math.round(ys(v));
+        var rect = OBS.el("rect", {
+          class: "pix", x: px0 + col * cw + 1.5, y: py1 + row * ch + 1.5,
+          width: cw - 3, height: ch - 3, rx: 1, fill: st.color, opacity: st.opacity
+        }, g);
+        rect.style.animationDelay = (pi++ * 0.03) + "s";
+      });
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 # =====================================================================
-# OBS MODULAR DASHBOARD  ·  export_data.py
+# OBS MODULAR DASHBOARD  ·  export_data.py   (Multi-Sheet / Multi-Series)
 # ---------------------------------------------------------------------
-# Utility-Skript: liest Werte aus einer beliebigen Excel-Datei und
-# exportiert sie in eine lokale "dashboard_data.json", die von allen
-# HTML/SVG-Modulen gelesen wird.
+# Liest eine Excel-MATRIX und exportiert sie in eine flexible Datenbasis.
 #
-# - EXCEL_PATH unten anpassen.
-# - Fehlt die Datei (oder pandas/openpyxl), werden automatisch die
-#   eingebauten DUMMY_DATA geschrieben -> sofort testbar, ganz ohne Excel.
+# NEUE LOGIK:
+#   * Jedes Tabellenblatt (Sheet) der Excel-Datei = EIN Diagramm-Datensatz.
+#   * Innerhalb eines Sheets:
+#       - 1. Spalte  = labels (X-Achse / Kategorien)
+#       - alle weiteren Spalten = je eine Datenreihe (dataset),
+#         der Spaltenkopf ist der Reihenname (z.B. "Var 1", "Var 2", ...)
 #
-# Erwartete (generische) Tabellenblätter in der Excel-Datei:
-#   * "gauges" : Spalten  id | label | value | min | max | unit
-#   * "line"   : Spalten  x | y
-#   * "bar"    : Spalten  label | y
-#   * "pie"    : Spalten  label | y
-#   * "area"   : Spalten  x | y
-#   * "scatter": Spalten  x | y
-#   * "radar"  : Spalten  label | y
-#   * "combo"  : Spalten  label | bar | line
-# Nicht vorhandene Blätter werden einfach mit Dummy-Werten gefüllt.
+# AUSGABE (zwei Dateien, gleicher Inhalt):
+#   * dashboard_data.json  -> klassisch (Server / Tools / Kontrolle)
+#   * dashboard_data.js    -> setzt window.OBS_DATA = {...}
+#                             => per <script> einbindbar, läuft über das
+#                                file://-Protokoll OHNE CORS-Fehler.
+#
+# Ohne Excel/pandas werden eingebaute DUMMY_DATA geschrieben -> sofort testbar.
 # =====================================================================
 
 import json
@@ -27,94 +25,64 @@ import os
 
 # --- HIER anpassen: Pfad zur Excel-Datei ----------------------------
 EXCEL_PATH = "dashboard.xlsx"
-OUTPUT_PATH = "dashboard_data.json"
+OUTPUT_JSON = "dashboard_data.json"
+OUTPUT_JS = "dashboard_data.js"
 
 # ---------------------------------------------------------------------
-# Eingebaute, realistische Dummy-Daten (Fallback + Sofort-Test)
+# Eingebaute Dummy-Daten in der NEUEN sheets/datasets-Struktur
+# (deckt mehrere Diagrammtypen ab: Zeitreihen, Radar, Anteile)
 # ---------------------------------------------------------------------
+_MONTHS = ["Jan", "Feb", "Mrz", "Apr", "Mai", "Jun",
+           "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
+
 DUMMY_DATA = {
-    "meta": {"source": "dummy", "generated": "built-in sample"},
-    "gauges": [
-        {"id": "g1", "label": "POWER OUTPUT", "value": 72,  "min": 0, "max": 100, "unit": "%"},
-        {"id": "g2", "label": "CORE TEMP",    "value": 64,  "min": 0, "max": 120, "unit": "°C"},
-        {"id": "g3", "label": "VELOCITY",     "value": 340, "min": 0, "max": 500, "unit": "km/h"},
-        {"id": "g4", "label": "SIGNAL",       "value": 88,  "min": 0, "max": 100, "unit": "%"},
-    ],
-    "series": {
-        "line": {
-            "label": "SIGNAL FLUX",
-            "points": [
-                {"x": "00:00", "y": 42}, {"x": "01:00", "y": 55},
-                {"x": "02:00", "y": 48}, {"x": "03:00", "y": 71},
-                {"x": "04:00", "y": 63}, {"x": "05:00", "y": 80},
-                {"x": "06:00", "y": 74}, {"x": "07:00", "y": 92},
-            ],
+    "meta": {"source": "dummy", "sheets_found": ["Umsatz", "Auslastung", "Profil", "Anteile"]},
+    "sheets": {
+        # Zeitreihe mit 4 Datenreihen -> ideal für Line / Area / Bar / Scatter / Combo
+        "Umsatz": {
+            "labels": _MONTHS,
+            "datasets": {
+                "Var 1": [200, 300, 350, 450, 480, 499, 520, 599, 700, 820, 920, 1000],
+                "Var 2": [50, 60, 70, 60, 80, 60, 80, 90, 50, 30, 50, 60],
+                "Var 3": [350, 320, 300, 250, 220, 180, 190, 200, 230, 210, 200, 225],
+                "Var 4": [278, 299, 350, 200, 220, 180, 250, 230, 210, 190, 240, 220],
+            },
         },
-        "bar": {
-            "label": "THROUGHPUT",
-            "points": [
-                {"label": "ALPHA", "y": 40}, {"label": "BRAVO", "y": 65},
-                {"label": "DELTA", "y": 52}, {"label": "ECHO",  "y": 78},
-                {"label": "FOXT",  "y": 60}, {"label": "GOLF",  "y": 47},
-            ],
+        # Zwei Reihen -> gut für Verbund (Combo: Var1=Balken, Var2=Linie)
+        "Auslastung": {
+            "labels": _MONTHS,
+            "datasets": {
+                "Var 1": [40, 65, 52, 78, 60, 47, 70, 82, 75, 90, 66, 80],
+                "Var 2": [30, 48, 62, 70, 81, 55, 60, 72, 68, 85, 59, 74],
+            },
         },
-        "pie": {
-            "label": "DISTRIBUTION",
-            "points": [
-                {"label": "CORE", "y": 35}, {"label": "AUX", "y": 25},
-                {"label": "NET",  "y": 22}, {"label": "RES", "y": 18},
-            ],
+        # Wenige Achsen -> ideal für Radar
+        "Profil": {
+            "labels": ["SPD", "PWR", "DEF", "ACC", "EFF", "RES"],
+            "datasets": {
+                "Var 1": [80, 65, 50, 72, 60, 45],
+                "Var 2": [55, 70, 62, 48, 75, 58],
+            },
         },
-        "area": {
-            "label": "SYSTEM LOAD",
-            "points": [
-                {"x": "00:00", "y": 30}, {"x": "01:00", "y": 45},
-                {"x": "02:00", "y": 40}, {"x": "03:00", "y": 60},
-                {"x": "04:00", "y": 55}, {"x": "05:00", "y": 72},
-                {"x": "06:00", "y": 68}, {"x": "07:00", "y": 85},
-            ],
-        },
-        "scatter": {
-            "label": "SAMPLE FIELD",
-            "points": [
-                {"x": 12, "y": 22}, {"x": 28, "y": 41}, {"x": 35, "y": 18},
-                {"x": 44, "y": 63}, {"x": 51, "y": 47}, {"x": 58, "y": 72},
-                {"x": 63, "y": 35}, {"x": 70, "y": 58}, {"x": 77, "y": 80},
-                {"x": 82, "y": 44}, {"x": 88, "y": 66}, {"x": 95, "y": 52},
-                {"x": 18, "y": 55}, {"x": 33, "y": 77}, {"x": 47, "y": 29},
-                {"x": 60, "y": 90}, {"x": 73, "y": 12}, {"x": 86, "y": 38},
-            ],
-        },
-        "radar": {
-            "label": "PERFORMANCE",
-            "axes": [
-                {"label": "SPD", "y": 80}, {"label": "PWR", "y": 65},
-                {"label": "DEF", "y": 50}, {"label": "ACC", "y": 72},
-                {"label": "EFF", "y": 60},
-            ],
-        },
-        "combo": {
-            "label": "TREND ANALYSIS",
-            "points": [
-                {"label": "Q1", "bar": 40, "line": 30},
-                {"label": "Q2", "bar": 55, "line": 48},
-                {"label": "Q3", "bar": 50, "line": 62},
-                {"label": "Q4", "bar": 72, "line": 70},
-                {"label": "Q5", "bar": 66, "line": 81},
-            ],
+        # Wenige Kategorien -> ideal für Kreisdiagramme
+        "Anteile": {
+            "labels": ["CORE", "AUX", "NET", "RES"],
+            "datasets": {
+                "Var 1": [35, 25, 22, 18],
+            },
         },
     },
 }
 
 
 # ---------------------------------------------------------------------
-# Excel-Auslese-Logik (generisch, pro Tabellenblatt)
+# Excel-Auslese (generisch: pro Sheet 1 Label-Spalte + N Datenreihen)
 # ---------------------------------------------------------------------
 def read_excel(path):
-    """Liest die Excel-Datei und baut das Datenmodell. Gibt None zurück,
-    wenn pandas fehlt oder die Datei nicht existiert."""
+    """Liest jede Tabelle der Excel-Datei in die sheets/datasets-Struktur.
+    Gibt None zurück, wenn pandas fehlt oder die Datei nicht existiert."""
     try:
-        import pandas as pd  # nur importieren, wenn wirklich gebraucht
+        import pandas as pd
     except ImportError:
         print("[i] pandas nicht installiert -> nutze Dummy-Daten "
               "(pip install pandas openpyxl)")
@@ -124,88 +92,63 @@ def read_excel(path):
         print(f"[i] Excel '{path}' nicht gefunden -> nutze Dummy-Daten")
         return None
 
-    print(f"[+] Lese Excel: {path}")
+    print(f"[+] Lese Excel-Matrix: {path}")
     xls = pd.ExcelFile(path)
-    sheets = {name.lower(): name for name in xls.sheet_names}
-    data = {"meta": {"source": path}, "gauges": [], "series": {}}
+    sheets = {}
 
-    def sheet(name):
-        """Tabellenblatt als Liste von dicts, oder None."""
-        if name in sheets:
-            df = xls.parse(sheets[name]).fillna(0)
-            return df.to_dict(orient="records")
+    for name in xls.sheet_names:
+        df = xls.parse(name)
+        if df.empty or len(df.columns) < 2:
+            print(f"    - überspringe leeres/zu schmales Blatt '{name}'")
+            continue
+
+        cols = list(df.columns)
+        label_col = cols[0]
+        labels = ["" if pd.isna(v) else str(v) for v in df[label_col].tolist()]
+
+        datasets = {}
+        for c in cols[1:]:
+            datasets[str(c)] = [float(x) if pd.notna(x) else 0.0 for x in df[c].tolist()]
+
+        sheets[str(name)] = {"labels": labels, "datasets": datasets}
+        print(f"    - '{name}': {len(labels)} Labels, "
+              f"{len(datasets)} Datenreihe(n) ({', '.join(datasets.keys())})")
+
+    if not sheets:
+        print("[i] keine brauchbaren Blätter gefunden -> nutze Dummy-Daten")
         return None
 
-    # --- Gauges -----------------------------------------------------
-    gauges = sheet("gauges")
-    if gauges:
-        for i, row in enumerate(gauges):
-            data["gauges"].append({
-                "id":    str(row.get("id", f"g{i+1}")),
-                "label": str(row.get("label", f"GAUGE {i+1}")),
-                "value": float(row.get("value", 0)),
-                "min":   float(row.get("min", 0)),
-                "max":   float(row.get("max", 100)),
-                "unit":  str(row.get("unit", "")),
-            })
-    else:
-        data["gauges"] = DUMMY_DATA["gauges"]
-
-    # --- XY-Serien (line / area / scatter) --------------------------
-    for key in ("line", "area", "scatter"):
-        rows = sheet(key)
-        if rows:
-            data["series"][key] = {
-                "label": key.upper(),
-                "points": [{"x": r.get("x", j), "y": float(r.get("y", 0))}
-                           for j, r in enumerate(rows)],
-            }
-        else:
-            data["series"][key] = DUMMY_DATA["series"][key]
-
-    # --- Kategorie-Serien (bar / pie / radar) -----------------------
-    for key in ("bar", "pie", "radar"):
-        rows = sheet(key)
-        if rows:
-            field = "axes" if key == "radar" else "points"
-            data["series"][key] = {
-                "label": key.upper(),
-                field: [{"label": str(r.get("label", j)), "y": float(r.get("y", 0))}
-                        for j, r in enumerate(rows)],
-            }
-        else:
-            data["series"][key] = DUMMY_DATA["series"][key]
-
-    # --- Combo (bar + line) -----------------------------------------
-    rows = sheet("combo")
-    if rows:
-        data["series"]["combo"] = {
-            "label": "COMBO",
-            "points": [{"label": str(r.get("label", j)),
-                        "bar": float(r.get("bar", 0)),
-                        "line": float(r.get("line", 0))}
-                       for j, r in enumerate(rows)],
-        }
-    else:
-        data["series"]["combo"] = DUMMY_DATA["series"]["combo"]
-
-    return data
+    return {"meta": {"source": path, "sheets_found": list(sheets.keys())},
+            "sheets": sheets}
 
 
 # ---------------------------------------------------------------------
-# Hauptprogramm
+# Schreiben: JSON + JS (window.OBS_DATA)
 # ---------------------------------------------------------------------
+def write_outputs(data):
+    payload = json.dumps(data, ensure_ascii=False, indent=2)
+
+    with open(OUTPUT_JSON, "w", encoding="utf-8") as f:
+        f.write(payload)
+
+    # Die JS-Variante umgeht das file://-CORS-Problem: einfach per
+    # <script src="dashboard_data.js"></script> einbinden.
+    with open(OUTPUT_JS, "w", encoding="utf-8") as f:
+        f.write("/* Auto-generiert von export_data.py – nicht von Hand ändern. */\n")
+        f.write("window.OBS_DATA = ")
+        f.write(payload)
+        f.write(";\n")
+
+    sheets = data.get("sheets", {})
+    print(f"[✓] Geschrieben: {OUTPUT_JSON} + {OUTPUT_JS}  "
+          f"({len(sheets)} Sheet(s): {', '.join(sheets.keys())})")
+
+
 def main():
     data = read_excel(EXCEL_PATH)
     if data is None:
         data = DUMMY_DATA
-
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-    print(f"[✓] Geschrieben: {OUTPUT_PATH}  "
-          f"({len(data.get('gauges', []))} Gauges, "
-          f"{len(data.get('series', {}))} Serien)")
+    write_outputs(data)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     AREA 2 · "SCANLINES"
-     Flächendiagramm, dessen Füllung von horizontalen TV-Scanlines
-     durchzogen ist. Statisch: einmaliges Einfahren der Fläche.
+     AREA 2 · "SCANLINES"  (Multi-Serien, überlagert)
+     Pro Datenreihe eine Fläche mit TV-Scanline-Füllung in Serienfarbe +
+     Toplinie. Gemeinsame Y-Skala. Einmalige Wisch-In-Animation.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,13 +10,13 @@
 <title>Area · Scanlines</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .top-line { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
+  .axis { stroke: var(--c-grid); stroke-width: 1; }
+  .top-line { fill: none; stroke-width: var(--line-width);
               stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
               animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
-  /* Fläche wird durch clip-path einmalig "aufgewischt" */
   .area-clip rect { animation: wipe calc(1.5s / var(--speed)) ease-out forwards; }
   @keyframes wipe { from { width: 0; } to { width: 400px; } }
-  .axis     { stroke: var(--c-grid); stroke-width: 1; }
+  .lg-txt { fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -24,18 +24,13 @@
     <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
     <div class="module-title" id="title">SCANLINES</div>
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <!-- TV-Scanline-Muster: dünne horizontale Linien -->
-        <pattern id="scanPat" width="4" height="4" patternUnits="userSpaceOnUse">
-          <rect width="4" height="4" fill="var(--c-primary)" opacity="0.30"/>
-          <line x1="0" y1="0" x2="4" y2="0" stroke="var(--c-accent)" stroke-width="1" opacity="0.55"/>
-        </pattern>
-        <!-- Wisch-Clip für die In-Animation -->
+      <defs id="defs">
         <clipPath id="areaClip" class="area-clip"><rect x="0" y="0" width="0" height="260"/></clipPath>
       </defs>
       <g id="axis"></g>
-      <path id="area" fill="url(#scanPat)" clip-path="url(#areaClip)"/>
-      <path class="top-line" id="line"/>
+      <g id="areas" clip-path="url(#areaClip)"></g>
+      <g id="lines"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">AREA</div>
   </div>
@@ -43,29 +38,41 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 26, r: 18, t: 24, b: 26 }, W = 400, H = 260;
+  var M = { l: 26, r: 18, t: 26, b: 26 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.area) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "SCANLINES";
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "SCANLINES";
+    var n = sheet.labels.length || 1;
+    var xs = OBS.scale(0, n - 1, px0, px1);
+    var ys = OBS.scale(0, sheet.max || 1, py0, py1);
 
-    var xs = OBS.scale(0, pts.length - 1 || 1, px0, px1);
-    var ext = OBS.extent(pts, function (d) { return d.y; });
-    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
 
-    var ax = document.getElementById("axis");
-    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
+    var defs = document.getElementById("defs"), areas = document.getElementById("areas"),
+        lines = document.getElementById("lines"), lg = document.getElementById("legend");
 
-    var top = pts.map(function (p, i) { return (i ? "L" : "M") + xs(i) + " " + ys(p.y); }).join(" ");
-    var area = top + " L" + xs(pts.length - 1) + " " + py0 + " L" + xs(0) + " " + py0 + " Z";
-    document.getElementById("area").setAttribute("d", area);
-    var line = document.getElementById("line");
-    line.setAttribute("d", top);
-    line.style.setProperty("--len", OBS.pathLen(line));
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      // Scanline-Pattern in Serienfarbe
+      var pat = OBS.el("pattern", { id: "sc" + si, width: 4, height: 4, patternUnits: "userSpaceOnUse" }, defs);
+      OBS.el("rect", { width: 4, height: 4, fill: st.color, opacity: 0.22 }, pat);
+      OBS.el("line", { x1: 0, y1: 0, x2: 4, y2: 0, stroke: st.color, "stroke-width": 1, opacity: 0.5 }, pat);
+
+      var top = se.values.map(function (v, i) { return (i ? "L" : "M") + xs(i) + " " + ys(v); }).join(" ");
+      var areaD = top + " L" + xs(n - 1) + " " + py0 + " L" + xs(0) + " " + py0 + " Z";
+      OBS.el("path", { d: areaD, fill: "url(#sc" + si + ")" }, areas);
+
+      var line = OBS.el("path", { class: "top-line", d: top, stroke: st.color,
+        "stroke-dasharray": st.dash === "none" ? "" : st.dash, opacity: st.opacity }, lines);
+      line.style.setProperty("--len", OBS.pathLen(line));
+      line.style.animationDelay = (si * 0.2) + "s";
+
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
+    });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

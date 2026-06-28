@@ -67,12 +67,6 @@
     }
   })();
 
-  function pickGauge(data){
-    var q=new URLSearchParams(location.search), gs=data.gauges||[];
-    if(q.has("gauge")) for(var i=0;i<gs.length;i++) if(gs[i].id===q.get("gauge")) return gs[i];
-    return gs[parseInt(q.get("index")||"2",10)]||gs[0]||{label:"—",value:0,min:0,max:100,unit:""};
-  }
-
   function show(g){
     var pct=Math.max(0,Math.min(1,(g.value-g.min)/(g.max-g.min||1)));
     document.getElementById("unit").textContent=g.unit||"";
@@ -94,8 +88,9 @@
     requestAnimationFrame(step);
   }
 
+  // Gauge-Wert aus einem Sheet ziehen: ?sheet=&dataset=&agg=&min=&max=&unit=
   OBS.loadData().then(function(data){
-    var g=pickGauge(data); show(g);
+    var g=OBS.gaugeFromSheet(data); show(g);
     // Demo: alle 8s erneut "Datenänderung" -> Flacker zeigen
     // (Im echten Betrieb würde ein neuer Datenwert show() auslösen.)
     setInterval(function(){ show(g); }, 8000);

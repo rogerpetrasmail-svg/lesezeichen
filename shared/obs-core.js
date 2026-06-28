@@ -6,10 +6,16 @@
    Aufgaben:
      1. Zentrale Settings (Farben, Linienstärke, Speed, Glow ...)
         - Defaults  ->  localStorage  ->  URL-Query-Parameter
-     2. Live-Update-Kanäle, damit der Customizer ALLE Module sofort
-        ändert:  storage-Event, BroadcastChannel, postMessage(iframe).
-     3. Daten laden aus dashboard_data.json.
-     4. Kleine SVG-/Mathe-Helfer (scale, polar, el) gegen Code-Doppelung.
+     2. Live-Update-Kanäle (Customizer ändert alle Module sofort):
+        storage-Event, BroadcastChannel, postMessage(iframe).
+     3. Daten laden aus der NEUEN sheets/datasets-Struktur.
+        - Bevorzugt window.OBS_DATA (per <script src="dashboard_data.js">)
+          => läuft über file:// OHNE CORS-Fehler.
+        - Fallback: fetch(dashboard_data.json) für den Server-Betrieb.
+        - URL-Parameter ?sheet=Blattname wählt das aktive Blatt
+          (ohne Angabe: erstes Blatt der JSON).
+     4. Helfer für Multi-Serien-Charts:
+        normalizeSheet(), seriesStyle(), gaugeFromSheet(), scale, polar, el.
 
    Bewusst dependency-frei (Vanilla JS), damit es 1:1 in einer OBS
    Browser Source läuft.
@@ -26,14 +32,16 @@
     accent: "#e67e22",
     text: "#ffd9b3",
     grid: "rgba(211,84,0,0.22)",
-    lineWidth: 2,   // px
-    speed: 1,       // Faktor (1 = normal, 2 = doppelt so schnell)
-    glow: 6,        // px
+    lineWidth: 2,
+    speed: 1,
+    glow: 6,
     frameOpacity: 0.18,
-    frame: true     // Tech-Rahmen anzeigen
+    frame: true
   };
 
-  /* ---- kleine Helfer ---------------------------------------------- */
+  /* ================================================================= *
+   *  TEIL 1+2 · SETTINGS & LIVE-UPDATE  (unverändert/bewährt)
+   * ================================================================= */
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
 
   function readStorage() {
@@ -67,7 +75,6 @@
     return s;
   }
 
-  /* CSS-Variablen auf :root schreiben -> wirkt sofort auf alle Module */
   function apply(s) {
     var r = document.documentElement.style;
     r.setProperty("--c-primary", s.primary);
@@ -81,7 +88,6 @@
     r.setProperty("--frame-show", s.frame ? "block" : "none");
   }
 
-  /* ---- Settings speichern + an alle Empfänger broadcasten --------- */
   var channel = null;
   try { channel = new BroadcastChannel(CHANNEL_NAME); } catch (e) { channel = null; }
 
@@ -91,7 +97,6 @@
     try { global.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged)); } catch (e) {}
     apply(merged);
     if (channel) { try { channel.postMessage(merged); } catch (e) {} }
-    // an eingebettete iframes (Customizer-Vorschau) weiterreichen
     var frames = document.querySelectorAll("iframe");
     for (var i = 0; i < frames.length; i++) {
       try { frames[i].contentWindow.postMessage({ __obs: true, settings: merged }, "*"); } catch (e) {}
@@ -99,24 +104,16 @@
     return merged;
   }
 
-  /* ---- Live-Empfang in jedem Modul -------------------------------- */
   var listeners = [];
   function onChange(fn) { listeners.push(fn); }
   function emit(s) { for (var i = 0; i < listeners.length; i++) { try { listeners[i](s); } catch (e) {} } }
 
-  function refreshFromExternal() {
-    var s = current();
-    apply(s);
-    emit(s);
-  }
+  function refreshFromExternal() { var s = current(); apply(s); emit(s); }
 
-  // 1) localStorage-Änderung in anderem Tab/Source
   global.addEventListener("storage", function (ev) {
     if (ev.key === STORAGE_KEY) refreshFromExternal();
   });
-  // 2) BroadcastChannel (gleiche Browser-Instanz)
   if (channel) channel.onmessage = function () { refreshFromExternal(); };
-  // 3) postMessage von der Customizer-Seite (iframe-Vorschau)
   global.addEventListener("message", function (ev) {
     if (ev.data && ev.data.__obs && ev.data.settings) {
       try { global.localStorage.setItem(STORAGE_KEY, JSON.stringify(ev.data.settings)); } catch (e) {}
@@ -125,33 +122,175 @@
     }
   });
 
-  /* ---- Daten laden ------------------------------------------------- */
-  /* Lädt dashboard_data.json relativ zum Modul. Fällt auf eingebettete
-     Minimal-Dummydaten zurück, falls die Datei (noch) fehlt.          */
+  /* ================================================================= *
+   *  TEIL 3 · DATEN LADEN  (sheets/datasets, file://-tauglich)
+   * ================================================================= */
+
+  /* Minimaler Fallback in der NEUEN Struktur (falls weder JS noch JSON da). */
   var FALLBACK = {
-    gauges: [{ id: "g1", label: "SYSTEM", value: 72, min: 0, max: 100, unit: "%" }],
-    series: {
-      line:  { label: "SIGNAL",  points: [40,55,48,70,62,80,75,90].map(function (y, i) { return { x: i, y: y }; }) },
-      bar:   { label: "OUTPUT",  points: [{ label: "A", y: 40 }, { label: "B", y: 65 }, { label: "C", y: 52 }, { label: "D", y: 78 }, { label: "E", y: 60 }] },
-      pie:   { label: "SHARE",   points: [{ label: "CORE", y: 35 }, { label: "AUX", y: 25 }, { label: "NET", y: 22 }, { label: "RES", y: 18 }] },
-      area:  { label: "LOAD",    points: [30,45,40,60,55,72,68,85].map(function (y, i) { return { x: i, y: y }; }) },
-      scatter: { label: "DATA",  points: Array.from({ length: 24 }, function (_, i) { return { x: Math.random() * 100, y: Math.random() * 100 }; }) },
-      radar: { label: "PROFILE", axes: [{ label: "SPD", y: 80 }, { label: "PWR", y: 65 }, { label: "DEF", y: 50 }, { label: "ACC", y: 72 }, { label: "EFF", y: 60 }] },
-      combo: { label: "TREND",   points: [{ label: "Q1", bar: 40, line: 30 }, { label: "Q2", bar: 55, line: 48 }, { label: "Q3", bar: 50, line: 62 }, { label: "Q4", bar: 72, line: 70 }] }
+    meta: { source: "fallback", sheets_found: ["Demo"] },
+    sheets: {
+      Demo: {
+        labels: ["A", "B", "C", "D", "E", "F", "G", "H"],
+        datasets: {
+          "Var 1": [40, 55, 48, 70, 62, 80, 75, 90],
+          "Var 2": [20, 30, 35, 28, 40, 33, 45, 50]
+        }
+      }
     }
   };
 
-  function loadData() {
-    return fetch("../dashboard_data.json", { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("no file"); return r.json(); })
-      .catch(function () {
-        return fetch("dashboard_data.json", { cache: "no-store" })
-          .then(function (r) { if (!r.ok) throw new Error("no file"); return r.json(); })
-          .catch(function () { return FALLBACK; });
-      });
+  /* Skript dynamisch nachladen – funktioniert über file:// (anders als fetch). */
+  function injectScript(src) {
+    return new Promise(function (res, rej) {
+      var s = document.createElement("script");
+      s.src = src;
+      s.onload = function () { res(true); };
+      s.onerror = function () { rej(new Error("script " + src)); };
+      document.head.appendChild(s);
+    });
   }
 
-  /* ---- SVG-/Mathe-Helfer ------------------------------------------ */
+  function tryScripts(list) {
+    return list.reduce(function (p, src) {
+      return p.then(function (done) {
+        if (done || global.OBS_DATA) return true;
+        return injectScript(src).then(function () { return true; })
+          .catch(function () { return false; });
+      });
+    }, Promise.resolve(false));
+  }
+
+  function tryFetch(list) {
+    return list.reduce(function (p, url) {
+      return p.then(function (data) {
+        if (data) return data;
+        return fetch(url, { cache: "no-store" })
+          .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+          .catch(function () { return null; });
+      });
+    }, Promise.resolve(null));
+  }
+
+  /* loadData() liefert IMMER das vollständige Datenobjekt {meta, sheets}. */
+  function loadData() {
+    // 1) bereits per <script> eingebunden?
+    if (global.OBS_DATA && global.OBS_DATA.sheets) return Promise.resolve(global.OBS_DATA);
+
+    // 2) JS-Variante nachladen (kein CORS über file://)
+    return tryScripts(["../dashboard_data.js", "dashboard_data.js"]).then(function () {
+      if (global.OBS_DATA && global.OBS_DATA.sheets) return global.OBS_DATA;
+      // 3) Server-Fallback: JSON per fetch
+      return tryFetch(["../dashboard_data.json", "dashboard_data.json"]).then(function (j) {
+        return (j && j.sheets) ? j : FALLBACK;
+      });
+    });
+  }
+
+  /* ================================================================= *
+   *  TEIL 4 · SHEET-/SERIEN-HELFER
+   * ================================================================= */
+
+  /* aktiven Sheet-Namen aus ?sheet= bestimmen (sonst erstes Blatt). */
+  function activeSheetName(data) {
+    var q = new URLSearchParams(global.location.search);
+    var sheets = (data && data.sheets) || {};
+    var keys = Object.keys(sheets);
+    var want = q.get("sheet");
+    if (want && sheets[want]) return want;
+    return keys[0] || null;
+  }
+
+  /* Rohes Sheet-Objekt holen (per Name oder aktivem ?sheet=). */
+  function getSheet(data, name) {
+    var sheets = (data && data.sheets) || {};
+    var n = (name && sheets[name]) ? name : activeSheetName(data);
+    var s = (n && sheets[n]) || { labels: [], datasets: {} };
+    return { name: n || "", labels: s.labels || [], datasets: s.datasets || {} };
+  }
+
+  /* Sheet so aufbereiten, dass labels + ALLE Datenreihen iterierbar sind
+     und min/max GLOBAL über alle Reihen bekannt sind (gemeinsame Skala). */
+  function normalizeSheet(data, name) {
+    var s = getSheet(data, name);
+    var series = Object.keys(s.datasets).map(function (k) {
+      return { name: k, values: (s.datasets[k] || []).map(Number) };
+    });
+    var all = [];
+    series.forEach(function (se) {
+      se.values.forEach(function (v) { if (isFinite(v)) all.push(v); });
+    });
+    var min = all.length ? Math.min.apply(null, all) : 0;
+    var max = all.length ? Math.max.apply(null, all) : 1;
+    return {
+      name: s.name,
+      labels: s.labels,
+      series: series,
+      seriesCount: series.length,
+      min: min,
+      max: max
+    };
+  }
+
+  /* Stil pro Datenreihe – konsequent an die CSS-Variablen gekoppelt,
+     damit der Customizer alle Reihen LIVE umfärbt:
+       Reihe 0 -> primary, 1 -> accent, 2 -> text  (deine Vorgaben)
+       ab Reihe 3 wiederholen sich die Farben mit Strich-Muster,
+       damit die Linien optisch getrennt bleiben.                     */
+  var SERIES_COLORS = ["var(--c-primary)", "var(--c-accent)", "var(--c-text)"];
+  var SERIES_DASH = ["none", "7 5", "2 6", "10 4 2 4"];
+  function seriesStyle(i) {
+    return {
+      color: SERIES_COLORS[i % SERIES_COLORS.length],
+      dash: SERIES_DASH[Math.floor(i / SERIES_COLORS.length) % SERIES_DASH.length],
+      opacity: i < SERIES_COLORS.length ? 1 : 0.85
+    };
+  }
+
+  /* Einzelwert für ein Gauge aus einem Sheet ziehen.
+     Steuerung per URL: ?sheet=, ?dataset=Var 1, ?agg=last|max|min|avg|sum|first,
+     optional ?min= ?max= ?unit= ?label=.                              */
+  function aggregate(vals, mode) {
+    if (!vals.length) return 0;
+    switch (mode) {
+      case "max": return Math.max.apply(null, vals);
+      case "min": return Math.min.apply(null, vals);
+      case "sum": return vals.reduce(function (a, b) { return a + b; }, 0);
+      case "avg": return vals.reduce(function (a, b) { return a + b; }, 0) / vals.length;
+      case "first": return vals[0];
+      case "last":
+      default: return vals[vals.length - 1];
+    }
+  }
+  function niceMax(m) {
+    if (!isFinite(m) || m <= 0) return 100;
+    var p = Math.pow(10, Math.floor(Math.log10(m)));
+    return Math.ceil(m / p) * p;
+  }
+  function gaugeFromSheet(data) {
+    var q = new URLSearchParams(global.location.search);
+    var s = getSheet(data, q.get("sheet"));
+    var keys = Object.keys(s.datasets);
+    var dsName = q.get("dataset");
+    var key = (dsName && s.datasets[dsName] !== undefined) ? dsName : keys[0];
+    var vals = ((s.datasets && s.datasets[key]) || []).map(Number).filter(isFinite);
+    var value = aggregate(vals, q.get("agg") || "last");
+    var min = q.has("min") ? parseFloat(q.get("min")) : 0;
+    var max = q.has("max") ? parseFloat(q.get("max"))
+                           : niceMax(vals.length ? Math.max.apply(null, vals) : 100);
+    return {
+      label: q.get("label") || (s.name + (key ? " · " + key : "")),
+      id: key || s.name,
+      value: value,
+      min: min,
+      max: (max <= min ? min + 1 : max),
+      unit: q.get("unit") || ""
+    };
+  }
+
+  /* ================================================================= *
+   *  SVG-/MATHE-HELFER
+   * ================================================================= */
   var SVGNS = "http://www.w3.org/2000/svg";
 
   function el(tag, attrs, parent) {
@@ -160,32 +299,18 @@
     if (parent) parent.appendChild(n);
     return n;
   }
-
-  // lineare Skala domain -> range
   function scale(d0, d1, r0, r1) {
-    return function (v) {
-      if (d1 === d0) return r0;
-      return r0 + (v - d0) * (r1 - r0) / (d1 - d0);
-    };
+    return function (v) { if (d1 === d0) return r0; return r0 + (v - d0) * (r1 - r0) / (d1 - d0); };
   }
-
-  // Polar-Koordinate (0° = oben, im Uhrzeigersinn)
   function polar(cx, cy, r, deg) {
     var a = (deg - 90) * Math.PI / 180;
     return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   }
-
   function extent(arr, acc) {
     var lo = Infinity, hi = -Infinity;
-    for (var i = 0; i < arr.length; i++) {
-      var v = acc(arr[i]);
-      if (v < lo) lo = v;
-      if (v > hi) hi = v;
-    }
+    for (var i = 0; i < arr.length; i++) { var v = acc(arr[i]); if (v < lo) lo = v; if (v > hi) hi = v; }
     return [lo, hi];
   }
-
-  // Pfad-Länge messen (für draw-in Animation)
   function pathLen(node) { try { return node.getTotalLength(); } catch (e) { return 1000; } }
 
   /* ---- Public API -------------------------------------------------- */
@@ -197,17 +322,17 @@
     save: save,
     onChange: onChange,
     loadData: loadData,
-    el: el,
-    scale: scale,
-    polar: polar,
-    extent: extent,
-    pathLen: pathLen,
-    // Beim Start die aktuellen Settings sofort anwenden
+    // Sheet-/Serien-API
+    activeSheetName: activeSheetName,
+    getSheet: getSheet,
+    normalizeSheet: normalizeSheet,
+    seriesStyle: seriesStyle,
+    gaugeFromSheet: gaugeFromSheet,
+    // SVG-Helfer
+    el: el, scale: scale, polar: polar, extent: extent, pathLen: pathLen,
     init: function () { apply(current()); return current(); }
   };
 
-  // Auto-Init für Module (Customizer ruft init selbst nach Bedarf)
   OBS.init();
-
   global.OBS = OBS;
 })(window);

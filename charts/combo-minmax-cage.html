@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     COMBO 2 · "MIN/MAX CAGE"
-     Verbunddiagramm: Mittelwert-Linie eingefasst zwischen Min-/Max-
-     Grenzlinien ("Käfig"). Statisch: Band fadet ein, Linie zeichnet sich.
-     Nutzt die combo-Serie (bar = Wert, line = Trend) und leitet Min/Max
-     als Hüllkurve um die Werte ab.
+     COMBO 2 · "MIN/MAX CAGE"  (Verbund, Multi-Serien)
+     Käfig aus Grenzlinien: pro Label werden Min und Max ÜBER ALLE
+     Datenreihen ermittelt und als Band/Hüllkurve gezeichnet. Die erste
+     Reihe (Var 1) läuft als Mittel-/Hauptlinie hervorgehoben darin.
+     Band fadet ein, Hauptlinie zeichnet sich einmalig.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -12,17 +12,17 @@
 <title>Combo · Min/Max Cage</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .axis    { stroke: var(--c-grid); stroke-width: 1; }
-  .cage    { stroke: var(--c-primary); stroke-width: 1; stroke-dasharray: 4 4; fill: none; opacity:.7; }
-  .band    { fill: var(--c-primary); fill-opacity: .12; opacity: 0;
-             animation: fade-in calc(1.2s / var(--speed)) ease forwards .3s; }
-  .mid     { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
-             filter: drop-shadow(0 0 var(--glow) var(--c-accent));
-             stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
-             animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
-  .node    { fill: var(--c-accent); opacity: 0; animation: fade-in .4s ease forwards; }
-  .blabel  { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity:.85; }
-  .ctag    { fill: var(--c-primary); font-size: 9px; }
+  .axis { stroke: var(--c-grid); stroke-width: 1; }
+  .cage { stroke: var(--c-primary); stroke-width: 1; stroke-dasharray: 4 4; fill: none; opacity: .7; }
+  .band { fill: var(--c-primary); fill-opacity: .12; opacity: 0;
+          animation: fade-in calc(1.2s / var(--speed)) ease forwards .3s; }
+  .main { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
+          filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+          stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+          animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .node { fill: var(--c-accent); opacity: 0; animation: fade-in .4s ease forwards; }
+  .blabel { fill: var(--c-text); font-size: 10px; text-anchor: middle; opacity: .85; }
+  .ctag  { fill: var(--c-primary); font-size: 9px; }
 </style>
 </head>
 <body>
@@ -34,7 +34,7 @@
       <path class="band" id="band"/>
       <path class="cage" id="cmax"/>
       <path class="cage" id="cmin"/>
-      <path class="mid"  id="mid"/>
+      <path class="main" id="main"/>
       <g id="nodes"></g>
       <g id="labels"></g>
     </svg>
@@ -44,53 +44,56 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 24, t: 24, b: 32 }, W = 400, H = 260;
+  var M = { l: 30, r: 24, t: 26, b: 32 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.combo) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = (s.label || "MIN / MAX CAGE");
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "MIN / MAX CAGE";
+    var n = sheet.labels.length || 1;
+    if (!sheet.series.length) return;
 
-    // Mittelwert = line; Min/Max als Hüllkurve aus bar/line abgeleitet
-    var rows = pts.map(function (p) {
-      var mid = (p.line != null ? p.line : p.bar);
-      var spread = Math.max(8, mid * 0.22);
-      return { mid: mid, min: mid - spread, max: mid + spread };
-    });
+    // Pro Label: Min/Max über alle Reihen + Hauptlinie = erste Reihe
+    var main = sheet.series[0].values;
+    var rows = [];
+    for (var i = 0; i < n; i++) {
+      var vmin = Infinity, vmax = -Infinity;
+      sheet.series.forEach(function (se) {
+        var v = se.values[i]; if (v == null) return;
+        if (v < vmin) vmin = v; if (v > vmax) vmax = v;
+      });
+      // bei nur einer Reihe ein künstliches Band aufspannen
+      if (sheet.seriesCount < 2) { var sp = Math.max(8, (main[i] || 0) * 0.18); vmin = main[i] - sp; vmax = main[i] + sp; }
+      rows.push({ min: vmin, max: vmax, mid: main[i] });
+    }
 
-    var maxV = OBS.extent(rows, function (d) { return d.max; })[1] || 1;
-    var ys = OBS.scale(0, maxV, py0, py1);
-    var n = rows.length, slot = (px1 - px0) / Math.max(1, n - 1);
-    var cx = function (i) { return px0 + slot * i; };
+    var hi = sheet.max || 1, lo = Math.min(0, sheet.min);
+    var ys = OBS.scale(lo, hi, py0, py1);
+    var slot = (px1 - px0) / Math.max(1, n - 1), cx = function (i) { return px0 + slot * i; };
 
-    var ax = document.getElementById("axis");
-    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, ax);
+    OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
 
     var maxPath = rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.max); }).join(" ");
     var minPath = rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.min); }).join(" ");
     document.getElementById("cmax").setAttribute("d", maxPath);
     document.getElementById("cmin").setAttribute("d", minPath);
-    // Füll-Band zwischen Max und Min
-    var band = maxPath + " L" + cx(n - 1) + " " + ys(rows[n - 1].min) + " " +
-               rows.slice().reverse().map(function (r, i) { return "L" + cx(n - 1 - i) + " " + ys(r.min); }).join(" ") + " Z";
+    var band = maxPath + " " +
+      rows.slice().reverse().map(function (r, i) { return "L" + cx(n - 1 - i) + " " + ys(r.min); }).join(" ") + " Z";
     document.getElementById("band").setAttribute("d", band);
 
-    var mid = document.getElementById("mid");
-    mid.setAttribute("d", rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.mid); }).join(" "));
-    mid.style.setProperty("--len", OBS.pathLen(mid));
+    var ml = document.getElementById("main");
+    ml.setAttribute("d", rows.map(function (r, i) { return (i ? "L" : "M") + cx(i) + " " + ys(r.mid); }).join(" "));
+    ml.style.setProperty("--len", OBS.pathLen(ml));
 
     var nodes = document.getElementById("nodes"), labels = document.getElementById("labels");
     rows.forEach(function (r, i) {
-      var c = OBS.el("circle", { class: "node", cx: cx(i), cy: ys(r.mid), r: 3 }, nodes);
-      c.style.animationDelay = (0.8 + i * 0.1) + "s";
-      OBS.el("text", { class: "blabel", x: cx(i), y: py0 + 16 }, labels).textContent = pts[i].label;
+      var c = OBS.el("circle", { class: "node", cx: cx(i), cy: ys(r.mid), r: 2.6 }, nodes);
+      c.style.animationDelay = (0.8 + i * 0.07) + "s";
+      if (!(n > 8 && i % 2)) OBS.el("text", { class: "blabel", x: cx(i), y: py0 + 14 }, labels).textContent = sheet.labels[i];
     });
-    // Min/Max-Tags
     OBS.el("text", { class: "ctag", x: cx(0) + 2, y: ys(rows[0].max) - 4 }, labels).textContent = "MAX";
     OBS.el("text", { class: "ctag", x: cx(0) + 2, y: ys(rows[0].min) + 12 }, labels).textContent = "MIN";
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

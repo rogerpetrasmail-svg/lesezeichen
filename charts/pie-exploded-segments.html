@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     PIE 2 · "EXPLODED SEGMENTS"
-     Tortensegmente mit Abstand zur Mitte (exploded). Statisch: Segmente
-     gleiten einmalig nach außen + faden ein.
+     PIE 2 · "EXPLODED SEGMENTS"  (Kategorien aus labels, eine Reihe)
+     Tortensegmente mit Abstand zur Mitte. Standard: erste Datenreihe,
+     per ?dataset= wählbar. Einmalige pop-in Animation.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,10 +10,10 @@
 <title>Pie · Exploded Segments</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .slice { stroke: rgba(0,0,0,.35); stroke-width: 1; opacity: 0;
-           animation: pop calc(.8s / var(--speed)) ease-out forwards; }
+  .slice  { stroke: rgba(0,0,0,.35); stroke-width: 1; opacity: 0;
+            animation: pop calc(.8s / var(--speed)) ease-out forwards; }
   @keyframes pop { from { opacity: 0; } to { opacity: 1; } }
-  .slabel { fill: var(--c-text); font-size: 11px; text-anchor: middle; }
+  .slabel { fill: var(--c-text); font-size: 10px; text-anchor: middle; }
 </style>
 </head>
 <body>
@@ -29,48 +29,43 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var R = 90, EXPLODE = 12;
+  var R = 88, EXPLODE = 12;
+  var PAL = ["var(--c-primary)", "var(--c-accent)", "var(--c-text)"];
 
-  // Kreissegment-Pfad (Mittelpunkt 0,0), Start/Endwinkel in Grad
+  function pickSeries(sheet) {
+    var q = new URLSearchParams(location.search), want = q.get("dataset");
+    if (want) { for (var i = 0; i < sheet.series.length; i++) if (sheet.series[i].name === want) return sheet.series[i]; }
+    return sheet.series[0] || { name: "", values: [] };
+  }
   function arcPath(r, a0, a1) {
     var p0 = OBS.polar(0, 0, r, a0), p1 = OBS.polar(0, 0, r, a1);
     var large = (a1 - a0) > 180 ? 1 : 0;
-    return "M0 0 L" + p0.x + " " + p0.y +
-           " A" + r + " " + r + " 0 " + large + " 1 " + p1.x + " " + p1.y + " Z";
+    return "M0 0 L" + p0.x + " " + p0.y + " A" + r + " " + r + " 0 " + large + " 1 " + p1.x + " " + p1.y + " Z";
   }
 
-  function render(data) {
-    var s = (data.series && data.series.pie) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "EXPLODED SEGMENTS";
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "EXPLODED SEGMENTS";
+    var se = pickSeries(sheet), vals = se.values, labels = sheet.labels;
+    var total = vals.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var pie = document.getElementById("pie"), ang = 0;
 
-    var total = pts.reduce(function (a, p) { return a + p.y; }, 0) || 1;
-    var pie = document.getElementById("pie");
-    var ang = 0;
-
-    pts.forEach(function (p, i) {
-      var sweep = p.y / total * 360;
-      var a0 = ang, a1 = ang + sweep, mid = (a0 + a1) / 2;
-      // Versatz nach außen (explode) entlang der Segment-Mitte
+    vals.forEach(function (v, i) {
+      var sweep = v / total * 360, a0 = ang, a1 = ang + sweep, mid = (a0 + a1) / 2;
       var push = OBS.polar(0, 0, EXPLODE, mid);
       var path = OBS.el("path", {
-        class: "slice",
-        d: arcPath(R, a0, a1),
-        fill: i % 2 ? "var(--c-accent)" : "var(--c-primary)",
-        transform: "translate(" + push.x + "," + push.y + ")",
-        opacity: 0
+        class: "slice", d: arcPath(R, a0, a1), fill: PAL[i % PAL.length],
+        transform: "translate(" + push.x + "," + push.y + ")"
       }, pie);
-      path.style.fillOpacity = 0.45 + 0.5 * (1 - i / Math.max(1, pts.length - 1));
-      path.style.animationDelay = (i * 0.12) + "s";
+      path.style.fillOpacity = 0.45 + 0.5 * (1 - (i % PAL.length) / PAL.length);
+      path.style.animationDelay = (i * 0.1) + "s";
 
-      // Prozent-Label außerhalb
-      var lp = OBS.polar(0, 0, R + 22, mid);
-      var t = OBS.el("text", { class: "slabel", x: lp.x, y: lp.y + 4 }, pie);
-      t.textContent = Math.round(p.y / total * 100) + "%";
+      var lp = OBS.polar(push.x, push.y, R + 18, mid);
+      OBS.el("text", { class: "slabel", x: lp.x, y: lp.y + 4 }, pie).textContent =
+        (labels[i] || "") + " " + Math.round(v / total * 100) + "%";
       ang = a1;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

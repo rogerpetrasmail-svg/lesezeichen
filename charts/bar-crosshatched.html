@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     BAR 2 · "CROSSHATCHED"
-     Balken mit Schraffur-Füllung (technische Blueprint-Optik).
-     Statisch: einmalige rise-in Animation.
+     BAR 2 · "CROSSHATCHED"  (Multi-Serien, gruppiert)
+     Gruppierte Balken mit Schraffur-Rahmen. Jede Datenreihe in eigener
+     Farbe (an CSS-Variablen gekoppelt). Einmalige rise-in Animation.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,11 +10,11 @@
 <title>Bar · Crosshatched</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .bar      { stroke: var(--c-primary); stroke-width: var(--line-width);
-              transform-origin: bottom; animation: rise-in calc(.9s / var(--speed)) cubic-bezier(.2,.8,.2,1) forwards; }
-  .axis     { stroke: var(--c-grid); stroke-width: 1; }
-  .blabel   { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity: .85; }
-  .bval     { fill: var(--c-accent); font-size: 11px; text-anchor: middle; font-weight: 700; }
+  .axis  { stroke: var(--c-grid); stroke-width: 1; }
+  .bar   { stroke-width: var(--line-width); transform-origin: bottom;
+           animation: rise-in calc(.9s / var(--speed)) cubic-bezier(.2,.8,.2,1) forwards; }
+  .blabel{ fill: var(--c-text); font-size: 10px; text-anchor: middle; opacity: .85; }
+  .lg-txt{ fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -22,14 +22,11 @@
     <div class="tech-frame"><span class="corner-tr"></span><span class="corner-bl"></span></div>
     <div class="module-title" id="title">CROSSHATCHED</div>
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
-      <!-- Schraffur-Muster als SVG-Pattern -->
-      <defs>
-        <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1="0" y1="0" x2="0" y2="6" stroke="var(--c-primary)" stroke-width="1.4"/>
-        </pattern>
-      </defs>
+      <!-- je Datenreihe ein Schraffur-Pattern in der passenden Farbe -->
+      <defs id="defs"></defs>
       <g id="axis"></g>
       <g id="bars"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">BAR</div>
   </div>
@@ -37,32 +34,44 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 20, t: 24, b: 34 }, W = 400, H = 260;
+  var M = { l: 30, r: 20, t: 26, b: 32 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.bar) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "CROSSHATCHED";
-
-    var ext = OBS.extent(pts, function (d) { return d.y; });
-    var ys = OBS.scale(0, ext[1] || 1, py0, py1);
-    var n = pts.length, slot = (px1 - px0) / n, bw = slot * 0.55;
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "CROSSHATCHED";
+    var n = sheet.labels.length || 1, s = sheet.seriesCount || 1;
+    var ys = OBS.scale(0, sheet.max || 1, py0, py1);
+    var slot = (px1 - px0) / n, group = slot * 0.72, bw = group / s;
 
     OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
 
-    var g = document.getElementById("bars");
-    pts.forEach(function (p, i) {
-      var x = px0 + slot * i + (slot - bw) / 2;
-      var h = py0 - ys(p.y);
-      // Rahmen + Schraffur-Füllung
-      var bar = OBS.el("rect", { class: "bar", x: x, y: ys(p.y), width: bw, height: h, fill: "url(#hatch)" }, g);
-      bar.style.animationDelay = (i * 0.08) + "s";
-      OBS.el("text", { class: "blabel", x: x + bw / 2, y: py0 + 16 }, g).textContent = p.label;
-      OBS.el("text", { class: "bval",   x: x + bw / 2, y: ys(p.y) - 6 }, g).textContent = p.y;
+    var defs = document.getElementById("defs");
+    var bars = document.getElementById("bars"), lg = document.getElementById("legend");
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      // Schraffur-Pattern in Serienfarbe
+      var pat = OBS.el("pattern", { id: "hatch" + si, width: 6, height: 6,
+        patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)" }, defs);
+      OBS.el("line", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: st.color, "stroke-width": 1.4, opacity: st.opacity }, pat);
+
+      se.values.forEach(function (v, i) {
+        var x = px0 + slot * i + (slot - group) / 2 + si * bw;
+        var bar = OBS.el("rect", {
+          class: "bar", x: x, y: ys(v), width: Math.max(1, bw - 1.5), height: py0 - ys(v),
+          fill: "url(#hatch" + si + ")", stroke: st.color, opacity: st.opacity
+        }, bars);
+        bar.style.animationDelay = (i * 0.05 + si * 0.04) + "s";
+      });
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
+    });
+
+    sheet.labels.forEach(function (lab, i) {
+      if (n > 8 && i % 2) return;
+      OBS.el("text", { class: "blabel", x: px0 + slot * i + slot / 2, y: py0 + 14 }, bars).textContent = lab;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

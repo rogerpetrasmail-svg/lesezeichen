@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     SCATTER 1 · "CROSSHAIR DOTS"
-     Punktwolke, jeder Punkt als kleines Fadenkreuz. Statisch: Punkte
-     ploppen einmalig gestaffelt ein.
+     SCATTER 1 · "CROSSHAIR DOTS"  (Multi-Serien)
+     Jeder Wert (X = Label-Index, Y = Wert) als Fadenkreuz-Punkt. Jede
+     Datenreihe in eigener Farbe. Gemeinsame Y-Skala. Punkte ploppen ein.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,11 +10,12 @@
 <title>Scatter · Crosshair Dots</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .axis  { stroke: var(--c-grid); stroke-width: 1; }
-  .ch    { opacity: 0; animation: pop calc(.45s / var(--speed)) ease-out forwards; transform-box: fill-box; transform-origin: center; }
-  @keyframes pop { 0% { opacity:0; transform: scale(2.4); } 100% { opacity:1; transform: scale(1); } }
-  .ch line { stroke: var(--c-primary); stroke-width: var(--line-width); }
-  .ch circle { fill: var(--c-accent); }
+  .axis { stroke: var(--c-grid); stroke-width: 1; }
+  .ch   { opacity: 0; animation: pop calc(.45s / var(--speed)) ease-out forwards;
+          transform-box: fill-box; transform-origin: center; }
+  @keyframes pop { 0% { opacity: 0; transform: scale(2.4); } 100% { opacity: 1; transform: scale(1); } }
+  .ch line { stroke-width: var(--line-width); }
+  .lg-txt { fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -24,6 +25,7 @@
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
       <g id="axis"></g>
       <g id="dots"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">SCATTER</div>
   </div>
@@ -31,18 +33,15 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 20, t: 24, b: 28 }, W = 400, H = 260;
+  var M = { l: 30, r: 20, t: 26, b: 28 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.scatter) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "CROSSHAIR DOTS";
-
-    var ex = OBS.extent(pts, function (d) { return d.x; });
-    var ey = OBS.extent(pts, function (d) { return d.y; });
-    var xs = OBS.scale(ex[0], ex[1] || 1, px0, px1);
-    var ys = OBS.scale(ey[0], ey[1] || 1, py0, py1);
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "CROSSHAIR DOTS";
+    var n = sheet.labels.length || 1;
+    var lo = Math.min(0, sheet.min), hi = sheet.max || 1;
+    var xs = OBS.scale(0, n - 1, px0, px1);
+    var ys = OBS.scale(lo, hi, py0, py1);
 
     var ax = document.getElementById("axis");
     for (var k = 0; k <= 4; k++) {
@@ -50,17 +49,22 @@
       OBS.el("line", { class: "axis", x1: px0 + (px1 - px0) * k / 4, y1: py1, x2: px0 + (px1 - px0) * k / 4, y2: py0 }, ax);
     }
 
-    var g = document.getElementById("dots");
-    pts.forEach(function (p, i) {
-      var x = xs(p.x), y = ys(p.y);
-      var grp = OBS.el("g", { class: "ch" }, g);
-      grp.style.animationDelay = (i * 0.05) + "s";
-      OBS.el("line", { x1: x - 6, y1: y, x2: x + 6, y2: y }, grp);
-      OBS.el("line", { x1: x, y1: y - 6, x2: x, y2: y + 6 }, grp);
-      OBS.el("circle", { cx: x, cy: y, r: 2.2 }, grp);
+    var g = document.getElementById("dots"), lg = document.getElementById("legend"), di = 0;
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      se.values.forEach(function (v, i) {
+        var x = xs(i), y = ys(v);
+        var grp = OBS.el("g", { class: "ch" }, g);
+        grp.style.animationDelay = (di++ * 0.03) + "s";
+        OBS.el("line", { x1: x - 6, y1: y, x2: x + 6, y2: y, stroke: st.color, opacity: st.opacity }, grp);
+        OBS.el("line", { x1: x, y1: y - 6, x2: x, y2: y + 6, stroke: st.color, opacity: st.opacity }, grp);
+        OBS.el("circle", { cx: x, cy: y, r: 2.2, fill: st.color }, grp);
+      });
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent = se.name;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

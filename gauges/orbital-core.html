@@ -67,22 +67,11 @@
     }
   }
 
-  function pickGauge(data) {
-    var q = new URLSearchParams(location.search);
-    var gs = data.gauges || [];
-    if (q.has("gauge")) {
-      for (var i = 0; i < gs.length; i++) if (gs[i].id === q.get("gauge")) return gs[i];
-    }
-    var idx = parseInt(q.get("index") || "0", 10);
-    return gs[idx] || gs[0] || { label: "—", value: 0, min: 0, max: 100, unit: "" };
-  }
-
-  function render(data) {
+  function render(g) {
     buildRing(document.getElementById("ringOuter"), 130, 60, 10, 0.7);
     buildRing(document.getElementById("ringMid"),   108, 40, 7,  0.5);
     buildRing(document.getElementById("ringInner"),  92, 30, 5,  0.35);
 
-    var g = pickGauge(data);
     var pct = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min || 1)));
     document.getElementById("title").textContent = g.label || "ORBITAL CORE";
     document.getElementById("label").textContent = (g.id || "SYS").toUpperCase();
@@ -102,7 +91,8 @@
     requestAnimationFrame(step);
   }
 
-  OBS.loadData().then(render);
+  // Gauge-Wert aus einem Sheet ziehen: ?sheet=&dataset=&agg=&min=&max=&unit=
+  OBS.loadData().then(function (d) { render(OBS.gaugeFromSheet(d)); });
 })();
 </script>
 </body>

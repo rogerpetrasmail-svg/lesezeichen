@@ -69,15 +69,9 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  function pickGauge(data) {
-    var q = new URLSearchParams(location.search);
-    var gs = data.gauges || [];
-    if (q.has("gauge")) for (var i=0;i<gs.length;i++) if (gs[i].id===q.get("gauge")) return gs[i];
-    return gs[parseInt(q.get("index")||"1",10)] || gs[0] || {label:"—",value:0,min:0,max:100,unit:""};
-  }
-
+  // Gauge-Wert aus einem Sheet ziehen: ?sheet=&dataset=&agg=&min=&max=&unit=
   OBS.loadData().then(function (data) {
-    var g = pickGauge(data);
+    var g = OBS.gaugeFromSheet(data);
     var pct = Math.max(0, Math.min(1, (g.value - g.min) / (g.max - g.min || 1)));
     document.getElementById("label").textContent = g.label || "CHANNEL";
     document.getElementById("unit").textContent = g.unit || "";

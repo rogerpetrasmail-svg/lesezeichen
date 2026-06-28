@@ -2,14 +2,12 @@
 <!-- =====================================================================
      LIVE CUSTOMIZER · zentrale Steuerung aller Module
      ---------------------------------------------------------------------
-     Stellt Farben, Linienstärke, Animationsgeschwindigkeit, Glow und den
-     Tech-Rahmen für ALLE Module live ein. Die Einstellungen werden über
-     OBS.save() verteilt:
-        - localStorage  (persistent, von OBS-Sources gelesen)
-        - BroadcastChannel  (live über alle Tabs/Sources einer Browser-Instanz)
-        - postMessage  (live in die Vorschau-iframes unten)
-     Zusätzlich wird pro Modul ein OBS-URL mit ?Parametern generiert, den
-     man direkt in eine OBS Browser Source kopieren kann.
+     - Stellt Farben, Linienstärke, Speed, Glow und Rahmen GLOBAL & LIVE ein
+       (localStorage + BroadcastChannel + postMessage an die iframes).
+     - Sheet-Auswahl: bestimmt, welches Tabellenblatt (?sheet=) alle
+       Vorschau-Module zeigen.
+     - Pro Kachel:  "↗ Öffnen" (Modul in neuem Tab) und "⧉ URL kopieren"
+       (vollständiger OBS-Pfad inkl. ?sheet= und allen Design-Parametern).
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -18,51 +16,50 @@
 <style>
   :root { --pa:#d35400; --ac:#e67e22; }
   * { box-sizing: border-box; }
-  body { margin:0; font-family:"Segoe UI",sans-serif; color:#eee;
-         background:#15110d; display:flex; min-height:100vh; }
+  body { margin:0; font-family:"Segoe UI",sans-serif; color:#eee; background:#15110d; display:flex; min-height:100vh; }
 
-  /* --- Steuerungs-Panel links --- */
-  .panel { width:320px; flex:0 0 320px; background:#1d1813; border-right:1px solid #3a2a1a;
-           padding:20px; overflow-y:auto; }
+  .panel { width:320px; flex:0 0 320px; background:#1d1813; border-right:1px solid #3a2a1a; padding:20px; overflow-y:auto; }
   .panel h1 { font-size:16px; letter-spacing:2px; color:var(--ac); margin:0 0 4px; }
   .panel .hint { font-size:11px; color:#8a7a6a; margin-bottom:18px; line-height:1.5; }
   .ctl { margin-bottom:16px; }
-  .ctl label { display:block; font-size:12px; letter-spacing:1px; color:#cbb59f; margin-bottom:6px;
-               display:flex; justify-content:space-between; }
+  .ctl label { display:flex; justify-content:space-between; font-size:12px; letter-spacing:1px; color:#cbb59f; margin-bottom:6px; }
   .ctl label b { color:var(--ac); font-weight:600; }
   input[type=range] { width:100%; accent-color:var(--pa); }
   input[type=color] { width:100%; height:34px; border:none; background:none; cursor:pointer; }
-  .row { display:flex; gap:8px; }
-  .row > div { flex:1; }
+  select { width:100%; padding:8px; background:#100c08; color:#e8c9a8; border:1px solid #3a2a1a; border-radius:3px; font-size:13px; }
   .toggle { display:flex; align-items:center; gap:8px; font-size:12px; color:#cbb59f; }
   .btns { display:flex; gap:8px; margin-top:10px; }
-  button { flex:1; padding:9px; border:1px solid var(--pa); background:transparent; color:var(--ac);
-           letter-spacing:1px; font-size:12px; cursor:pointer; border-radius:3px; }
+  button { flex:1; padding:9px; border:1px solid var(--pa); background:transparent; color:var(--ac); letter-spacing:1px; font-size:12px; cursor:pointer; border-radius:3px; }
   button:hover { background:var(--pa); color:#000; }
   .url-box { margin-top:14px; }
-  .url-box textarea { width:100%; height:60px; background:#100c08; color:#caa; border:1px solid #3a2a1a;
-                      font-size:10px; padding:6px; resize:vertical; }
+  .url-box textarea { width:100%; height:54px; background:#100c08; color:#caa; border:1px solid #3a2a1a; font-size:10px; padding:6px; resize:vertical; }
 
-  /* --- Vorschau rechts --- */
   .stage { flex:1; padding:16px; overflow-y:auto; }
   .stage h2 { font-size:12px; letter-spacing:2px; color:#8a7a6a; margin:0 0 12px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:14px; }
   .cell { background:
             linear-gradient(45deg,#1a1510 25%,transparent 25%,transparent 75%,#1a1510 75%) 0 0/20px 20px,
             linear-gradient(45deg,#1a1510 25%,#0e0b08 25%,#0e0b08 75%,#1a1510 75%) 10px 10px/20px 20px;
           border:1px solid #2c2118; border-radius:4px; overflow:hidden; }
-  .cell .cap { font-size:10px; color:#9a8a78; padding:4px 8px; letter-spacing:1px;
+  .cell .cap { display:flex; align-items:center; justify-content:space-between; gap:6px;
+               font-size:10px; color:#9a8a78; padding:4px 6px 4px 8px; letter-spacing:1px;
                border-bottom:1px solid #2c2118; background:#171209; }
+  .cell .cap .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cell .cap .mini { flex:0 0 auto; padding:2px 6px; font-size:11px; border:1px solid #3a2a1a; color:#caa; background:#100c08; cursor:pointer; border-radius:3px; }
+  .cell .cap .mini:hover { background:var(--pa); color:#000; border-color:var(--pa); }
   .cell iframe { width:100%; height:150px; border:none; display:block; }
   .legend-bg { font-size:10px; color:#6a5a48; margin-top:6px; }
 </style>
 </head>
 <body>
-  <!-- =============== STEUERUNG =============== -->
   <aside class="panel">
     <h1>OBS · CUSTOMIZER</h1>
-    <div class="hint">Änderungen wirken sofort auf die Vorschau und auf alle
-      OBS Browser Sources, die im selben Browser/Profil laufen.</div>
+    <div class="hint">Änderungen wirken sofort auf die Vorschau und auf alle OBS Browser Sources im selben Browser/Profil.</div>
+
+    <div class="ctl">
+      <label>Datenblatt (Sheet)</label>
+      <select id="sheet"></select>
+    </div>
 
     <div class="ctl">
       <label>Primärfarbe <b id="vPrimary"></b></label>
@@ -76,7 +73,6 @@
       <label>Textfarbe <b id="vText"></b></label>
       <input type="color" id="text">
     </div>
-
     <div class="ctl">
       <label>Linienstärke <b id="vLine"></b></label>
       <input type="range" id="lineWidth" min="0.5" max="6" step="0.5">
@@ -99,142 +95,156 @@
 
     <div class="btns">
       <button id="reset">RESET</button>
-      <button id="copyUrl">OBS-URL KOPIEREN</button>
     </div>
     <div class="url-box">
-      <label style="font-size:11px;color:#8a7a6a;">URL-Parameter (an jede Modul-URL anhängen):</label>
+      <label style="font-size:11px;color:#8a7a6a;">Aktive Design-Parameter:</label>
       <textarea id="urlOut" readonly></textarea>
     </div>
   </aside>
 
-  <!-- =============== LIVE-VORSCHAU =============== -->
   <main class="stage">
     <h2>LIVE-VORSCHAU · ALLE MODULE</h2>
     <div class="grid" id="grid"></div>
-    <div class="legend-bg">Schachbrett = transparenter Hintergrund (so erscheint es in OBS).</div>
+    <div class="legend-bg">Schachbrett = transparenter Hintergrund (so erscheint es in OBS). · „↗" öffnet das Modul · „⧉" kopiert die vollständige OBS-URL.</div>
   </main>
 
 <script src="shared/obs-core.js"></script>
 <script>
 (function () {
-  // Liste aller Module für die Vorschau
+  // [Pfad, Anzeigename, optionaler Default-Zusatzquery (z.B. Gauge-Dataset)]
   var MODULES = [
-    ["gauges/orbital-core.html", "GAUGE · Orbital Core"],
-    ["gauges/linear-accelerator.html", "GAUGE · Linear Accelerator"],
-    ["gauges/target-scope.html", "GAUGE · Target Scope"],
-    ["gauges/segmented-matrix.html", "GAUGE · Segmented Matrix"],
-    ["charts/line-digital-grid.html", "LINE · Digital Grid"],
-    ["charts/line-stepped-pulse.html", "LINE · Stepped Pulse"],
-    ["charts/bar-solid-neon.html", "BAR · Solid Neon"],
-    ["charts/bar-crosshatched.html", "BAR · Crosshatched"],
-    ["charts/pie-tech-donut.html", "PIE · Tech Donut"],
-    ["charts/pie-exploded-segments.html", "PIE · Exploded Segments"],
-    ["charts/area-glow-fill.html", "AREA · Glow Fill"],
-    ["charts/area-scanlines.html", "AREA · Scanlines"],
-    ["charts/scatter-crosshair-dots.html", "SCATTER · Crosshair Dots"],
-    ["charts/scatter-signal-matrix.html", "SCATTER · Signal Matrix"],
-    ["charts/radar-spider-web.html", "RADAR · Spider Web"],
-    ["charts/radar-sonar-scan.html", "RADAR · Sonar Scan"],
-    ["charts/combo-trend-analyzer.html", "COMBO · Trend Analyzer"],
-    ["charts/combo-minmax-cage.html", "COMBO · Min/Max Cage"]
+    ["gauges/orbital-core.html", "GAUGE · Orbital Core", "dataset=Var 1"],
+    ["gauges/linear-accelerator.html", "GAUGE · Linear Accelerator", "dataset=Var 2"],
+    ["gauges/target-scope.html", "GAUGE · Target Scope", "dataset=Var 3"],
+    ["gauges/segmented-matrix.html", "GAUGE · Segmented Matrix", "dataset=Var 4&max=100"],
+    ["charts/line-digital-grid.html", "LINE · Digital Grid", ""],
+    ["charts/line-stepped-pulse.html", "LINE · Stepped Pulse", ""],
+    ["charts/bar-solid-neon.html", "BAR · Solid Neon", ""],
+    ["charts/bar-crosshatched.html", "BAR · Crosshatched", ""],
+    ["charts/pie-tech-donut.html", "PIE · Tech Donut", ""],
+    ["charts/pie-exploded-segments.html", "PIE · Exploded Segments", ""],
+    ["charts/area-glow-fill.html", "AREA · Glow Fill", ""],
+    ["charts/area-scanlines.html", "AREA · Scanlines", ""],
+    ["charts/scatter-crosshair-dots.html", "SCATTER · Crosshair Dots", ""],
+    ["charts/scatter-signal-matrix.html", "SCATTER · Signal Matrix", ""],
+    ["charts/radar-spider-web.html", "RADAR · Spider Web", ""],
+    ["charts/radar-sonar-scan.html", "RADAR · Sonar Scan", ""],
+    ["charts/combo-trend-analyzer.html", "COMBO · Trend Analyzer", ""],
+    ["charts/combo-minmax-cage.html", "COMBO · Min/Max Cage", ""]
   ];
 
-  // Vorschau-Grid bauen
-  var grid = document.getElementById("grid");
+  var $ = function (id) { return document.getElementById(id); };
+  var currentSheet = "";
+
+  /* ---- Design-Parameter aus den Controls bauen ---- */
+  function designParams() {
+    return "primary=" + $("primary").value.replace("#", "") +
+           "&accent=" + $("accent").value.replace("#", "") +
+           "&text=" + $("text").value.replace("#", "") +
+           "&lineWidth=" + $("lineWidth").value +
+           "&speed=" + $("speed").value +
+           "&glow=" + $("glow").value +
+           "&frameOpacity=" + $("frameOpacity").value +
+           "&frame=" + ($("frame").checked ? 1 : 0);
+  }
+  /* Vorschau-URL: NUR Sheet/Zusatz, KEIN Design im URL.
+     Wichtig – sonst hätten URL-Design-Parameter im iframe Vorrang vor den
+     Live-Kanälen (BroadcastChannel/postMessage) und der Customizer könnte
+     Farben nicht mehr live ändern. Das Design kommt hier rein über die
+     Live-Kanäle + localStorage. */
+  function previewURL(path, extra) {
+    var q = "?sheet=" + encodeURIComponent(currentSheet);
+    if (extra) q += "&" + extra;
+    return path + q;
+  }
+  /* Vollständige OBS-URL zum Kopieren/Öffnen: Sheet + Zusatz + Design.
+     Für den eigenständigen Einsatz in einer OBS Browser Source (dort gibt
+     es keinen Live-Customizer, also wird das Design fest im URL verankert). */
+  function fullURL(path, extra) {
+    return previewURL(path, extra) + "&" + designParams();
+  }
+
+  /* ---- Vorschau-Grid bauen ---- */
+  var grid = $("grid");
   MODULES.forEach(function (m) {
     var cell = document.createElement("div"); cell.className = "cell";
-    var cap = document.createElement("div"); cap.className = "cap"; cap.textContent = m[1];
-    var f = document.createElement("iframe"); f.src = m[0]; f.loading = "lazy";
+    var cap = document.createElement("div"); cap.className = "cap";
+    var name = document.createElement("span"); name.className = "name"; name.textContent = m[1];
+    var open = document.createElement("button"); open.className = "mini"; open.textContent = "↗"; open.title = "In neuem Tab öffnen";
+    var copy = document.createElement("button"); copy.className = "mini"; copy.textContent = "⧉"; copy.title = "OBS-URL kopieren";
+    var f = document.createElement("iframe"); f.loading = "lazy";
+
+    open.onclick = function () { window.open(fullURL(m[0], m[2]), "_blank"); };
+    copy.onclick = function () {
+      var url = fullURL(m[0], m[2]);
+      try { navigator.clipboard.writeText(url); } catch (e) {}
+      var t = copy.textContent; copy.textContent = "✓";
+      setTimeout(function () { copy.textContent = t; }, 1000);
+    };
+
+    cap.appendChild(name); cap.appendChild(open); cap.appendChild(copy);
     cell.appendChild(cap); cell.appendChild(f); grid.appendChild(cell);
+    m._frame = f; // iframe für späteres (Sheet-)Reload merken
   });
 
-  // --- Controls an Settings binden ---
-  var s = OBS.current();
-  var fields = {
-    primary: "value", accent: "value", text: "value",
-    lineWidth: "value", speed: "value", glow: "value", frameOpacity: "value", frame: "checked"
-  };
+  /* iframes (neu) laden – mit aktivem Sheet + Design im URL */
+  function reloadFrames() {
+    MODULES.forEach(function (m) { m._frame.src = previewURL(m[0], m[2]); });
+  }
 
-  function syncInputsFromSettings(st) {
-    document.getElementById("primary").value = st.primary;
-    document.getElementById("accent").value = st.accent;
-    document.getElementById("text").value = st.text;
-    document.getElementById("lineWidth").value = st.lineWidth;
-    document.getElementById("speed").value = st.speed;
-    document.getElementById("glow").value = st.glow;
-    document.getElementById("frameOpacity").value = st.frameOpacity;
-    document.getElementById("frame").checked = !!st.frame;
+  /* ---- Settings <-> Controls ---- */
+  function syncInputs(st) {
+    $("primary").value = st.primary; $("accent").value = st.accent; $("text").value = st.text;
+    $("lineWidth").value = st.lineWidth; $("speed").value = st.speed; $("glow").value = st.glow;
+    $("frameOpacity").value = st.frameOpacity; $("frame").checked = !!st.frame;
     updateBadges(st);
+  }
+  function updateBadges(st) {
+    $("vPrimary").textContent = st.primary; $("vAccent").textContent = st.accent; $("vText").textContent = st.text;
+    $("vLine").textContent = st.lineWidth + " px";
+    $("vSpeed").textContent = (+st.speed).toFixed(1) + "×";
+    $("vGlow").textContent = st.glow + " px";
+    $("vFrame").textContent = Math.round(st.frameOpacity * 100) + "%";
+    $("urlOut").value = designParams();
     document.documentElement.style.setProperty("--pa", st.primary);
     document.documentElement.style.setProperty("--ac", st.accent);
   }
-
-  function updateBadges(st) {
-    document.getElementById("vPrimary").textContent = st.primary;
-    document.getElementById("vAccent").textContent = st.accent;
-    document.getElementById("vText").textContent = st.text;
-    document.getElementById("vLine").textContent = st.lineWidth + " px";
-    document.getElementById("vSpeed").textContent = (+st.speed).toFixed(1) + "×";
-    document.getElementById("vGlow").textContent = st.glow + " px";
-    document.getElementById("vFrame").textContent = Math.round(st.frameOpacity * 100) + "%";
-    // OBS-URL-Parameter
-    document.getElementById("urlOut").value =
-      "?primary=" + st.primary.replace("#", "") +
-      "&accent=" + st.accent.replace("#", "") +
-      "&text=" + st.text.replace("#", "") +
-      "&lineWidth=" + st.lineWidth +
-      "&speed=" + st.speed +
-      "&glow=" + st.glow +
-      "&frameOpacity=" + st.frameOpacity +
-      "&frame=" + (st.frame ? 1 : 0);
-  }
-
   function collect() {
     return {
-      primary: document.getElementById("primary").value,
-      accent: document.getElementById("accent").value,
-      text: document.getElementById("text").value,
-      lineWidth: parseFloat(document.getElementById("lineWidth").value),
-      speed: parseFloat(document.getElementById("speed").value),
-      glow: parseFloat(document.getElementById("glow").value),
-      frameOpacity: parseFloat(document.getElementById("frameOpacity").value),
-      frame: document.getElementById("frame").checked
+      primary: $("primary").value, accent: $("accent").value, text: $("text").value,
+      lineWidth: parseFloat($("lineWidth").value), speed: parseFloat($("speed").value),
+      glow: parseFloat($("glow").value), frameOpacity: parseFloat($("frameOpacity").value),
+      frame: $("frame").checked
     };
   }
+  function pushLive() { var st = collect(); OBS.save(st); updateBadges(st); }
 
-  function pushLive() {
-    var st = collect();
-    OBS.save(st);          // localStorage + BroadcastChannel + iframe postMessage
-    updateBadges(st);
-    document.documentElement.style.setProperty("--pa", st.primary);
-    document.documentElement.style.setProperty("--ac", st.accent);
-  }
-
-  // Jede Eingabe -> live verteilen
-  Object.keys(fields).forEach(function (id) {
-    document.getElementById(id).addEventListener("input", pushLive);
-    document.getElementById(id).addEventListener("change", pushLive);
+  ["primary","accent","text","lineWidth","speed","glow","frameOpacity","frame"].forEach(function (id) {
+    $(id).addEventListener("input", pushLive);
+    $(id).addEventListener("change", pushLive);
   });
 
-  // Reset auf Defaults
-  document.getElementById("reset").addEventListener("click", function () {
-    OBS.save(OBS.DEFAULTS);
-    syncInputsFromSettings(OBS.DEFAULTS);
-    // iframes neu laden, damit In-Animationen erneut laufen
-    document.querySelectorAll("iframe").forEach(function (f) { f.src = f.src; });
+  $("reset").addEventListener("click", function () {
+    OBS.save(OBS.DEFAULTS); syncInputs(OBS.DEFAULTS); reloadFrames();
   });
 
-  // OBS-URL in Zwischenablage
-  document.getElementById("copyUrl").addEventListener("click", function () {
-    var ta = document.getElementById("urlOut"); ta.select();
-    try { navigator.clipboard.writeText(ta.value); } catch (e) { document.execCommand("copy"); }
-    var b = this; var t = b.textContent; b.textContent = "KOPIERT ✓";
-    setTimeout(function () { b.textContent = t; }, 1200);
+  $("sheet").addEventListener("change", function () {
+    currentSheet = $("sheet").value; reloadFrames();
   });
 
-  syncInputsFromSettings(s);
-  // beim ersten Laden aktuelle Settings an die (noch ladenden) iframes schicken
-  setTimeout(pushLive, 600);
+  /* ---- Start: Settings + Sheet-Liste laden ---- */
+  syncInputs(OBS.current());
+  OBS.loadData().then(function (data) {
+    var keys = Object.keys((data && data.sheets) || {});
+    var sel = $("sheet");
+    keys.forEach(function (k) {
+      var o = document.createElement("option"); o.value = k; o.textContent = k; sel.appendChild(o);
+    });
+    currentSheet = keys[0] || "";
+    reloadFrames();
+    // aktuelle Settings an die (geladenen) iframes nachreichen
+    setTimeout(pushLive, 700);
+  });
 })();
 </script>
 </body>

@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <!-- =====================================================================
-     COMBO 1 · "TREND ANALYZER"
-     Verbunddiagramm: Balken (Volumen) + überlagerte Trend-Linie.
-     Statisch: Balken steigen, Linie zeichnet sich einmalig.
+     COMBO 1 · "TREND ANALYZER"  (Verbund, Multi-Serien)
+     Erste Datenreihe (Var 1) = Balken (Volumen), jede weitere Reihe
+     (Var 2, Var 3 ...) = überlagerte Trend-Linie. Gemeinsame Y-Skala.
+     Balken steigen, Linien zeichnen sich einmalig.
      ===================================================================== -->
 <html lang="de">
 <head>
@@ -10,15 +11,14 @@
 <title>Combo · Trend Analyzer</title>
 <link rel="stylesheet" href="../shared/obs-core.css">
 <style>
-  .axis    { stroke: var(--c-grid); stroke-width: 1; }
-  .bar     { fill: var(--c-primary); fill-opacity: .55;
-             transform-origin: bottom; animation: rise-in calc(.9s / var(--speed)) ease-out forwards; }
-  .trend   { stroke: var(--c-accent); stroke-width: var(--line-width); fill: none;
-             filter: drop-shadow(0 0 var(--glow) var(--c-accent));
-             stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
-             animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; animation-delay:.5s; }
-  .node    { fill: var(--c-accent); opacity: 0; animation: fade-in .4s ease forwards; }
-  .blabel  { fill: var(--c-text); font-size: 11px; text-anchor: middle; opacity:.85; }
+  .axis  { stroke: var(--c-grid); stroke-width: 1; }
+  .bar   { transform-origin: bottom; animation: rise-in calc(.9s / var(--speed)) ease-out forwards; }
+  .trend { fill: none; stroke-width: var(--line-width); filter: drop-shadow(0 0 var(--glow) var(--c-accent));
+           stroke-dasharray: var(--len); stroke-dashoffset: var(--len);
+           animation: draw-in calc(1.6s / var(--speed)) ease-out forwards; }
+  .node  { opacity: 0; animation: fade-in .4s ease forwards; }
+  .blabel{ fill: var(--c-text); font-size: 10px; text-anchor: middle; opacity: .85; }
+  .lg-txt{ fill: var(--c-text); font-size: 10px; }
 </style>
 </head>
 <body>
@@ -28,9 +28,10 @@
     <svg class="viz" viewBox="0 0 400 260" preserveAspectRatio="xMidYMid meet">
       <g id="axis"></g>
       <g id="bars"></g>
-      <path class="trend" id="trend"/>
+      <g id="lines"></g>
       <g id="nodes"></g>
       <g id="labels"></g>
+      <g id="legend"></g>
     </svg>
     <div class="module-sub" id="sub">COMBO</div>
   </div>
@@ -38,44 +39,54 @@
 <script src="../shared/obs-core.js"></script>
 <script>
 (function () {
-  var M = { l: 30, r: 20, t: 24, b: 32 }, W = 400, H = 260;
+  var M = { l: 30, r: 20, t: 26, b: 32 }, W = 400, H = 260;
   var px0 = M.l, px1 = W - M.r, py0 = H - M.b, py1 = M.t;
 
-  function render(data) {
-    var s = (data.series && data.series.combo) || { points: [] };
-    var pts = s.points || [];
-    document.getElementById("title").textContent = s.label || "TREND ANALYZER";
-
-    var maxBar = OBS.extent(pts, function (d) { return d.bar; })[1] || 1;
-    var maxLine = OBS.extent(pts, function (d) { return d.line; })[1] || 1;
-    var ysBar = OBS.scale(0, maxBar, py0, py1);
-    var ysLine = OBS.scale(0, maxLine, py0, py1);
-    var n = pts.length, slot = (px1 - px0) / n, bw = slot * 0.5;
+  function render(sheet) {
+    document.getElementById("title").textContent = sheet.name || "TREND ANALYZER";
+    var n = sheet.labels.length || 1;
+    var ys = OBS.scale(0, sheet.max || 1, py0, py1);   // gemeinsame Skala
+    var slot = (px1 - px0) / n, bw = slot * 0.5;
+    var cx = function (i) { return px0 + slot * i + slot / 2; };
 
     OBS.el("line", { class: "axis", x1: px0, y1: py0, x2: px1, y2: py0 }, document.getElementById("axis"));
 
-    var bars = document.getElementById("bars"), labels = document.getElementById("labels");
-    pts.forEach(function (p, i) {
-      var x = px0 + slot * i + (slot - bw) / 2;
-      var bar = OBS.el("rect", { class: "bar", x: x, y: ysBar(p.bar), width: bw, height: py0 - ysBar(p.bar), rx: 2 }, bars);
-      bar.style.animationDelay = (i * 0.07) + "s";
-      OBS.el("text", { class: "blabel", x: px0 + slot * i + slot / 2, y: py0 + 16 }, labels).textContent = p.label;
+    var bars = document.getElementById("bars"), lines = document.getElementById("lines"),
+        nodes = document.getElementById("nodes"), labels = document.getElementById("labels"),
+        lg = document.getElementById("legend");
+
+    sheet.series.forEach(function (se, si) {
+      var st = OBS.seriesStyle(si);
+      if (si === 0) {
+        // erste Reihe als Balken
+        se.values.forEach(function (v, i) {
+          var bar = OBS.el("rect", { class: "bar", x: cx(i) - bw / 2, y: ys(v), width: bw, height: py0 - ys(v),
+            rx: 2, fill: st.color, opacity: 0.55 }, bars);
+          bar.style.animationDelay = (i * 0.06) + "s";
+        });
+      } else {
+        // weitere Reihen als Trend-Linien
+        var d = se.values.map(function (v, i) { return (i ? "L" : "M") + cx(i) + " " + ys(v); }).join(" ");
+        var line = OBS.el("path", { class: "trend", d: d, stroke: st.color,
+          "stroke-dasharray": st.dash === "none" ? "" : st.dash, opacity: st.opacity }, lines);
+        line.style.setProperty("--len", OBS.pathLen(line));
+        line.style.animationDelay = (0.4 + si * 0.15) + "s";
+        se.values.forEach(function (v, i) {
+          var c = OBS.el("circle", { class: "node", cx: cx(i), cy: ys(v), r: 2.6, fill: st.color }, nodes);
+          c.style.animationDelay = (0.9 + i * 0.07) + "s";
+        });
+      }
+      OBS.el("rect", { x: px1 - 70, y: py1 - 14 + si * 13, width: 9, height: 9, rx: 2, fill: st.color, opacity: st.opacity }, lg);
+      OBS.el("text", { class: "lg-txt", x: px1 - 57, y: py1 - 6 + si * 13 }, lg).textContent =
+        se.name + (si === 0 ? " (Balken)" : "");
     });
 
-    // Trend-Linie über Balkenmitten
-    var cx = function (i) { return px0 + slot * i + slot / 2; };
-    var d = pts.map(function (p, i) { return (i ? "L" : "M") + cx(i) + " " + ysLine(p.line); }).join(" ");
-    var trend = document.getElementById("trend");
-    trend.setAttribute("d", d);
-    trend.style.setProperty("--len", OBS.pathLen(trend));
-
-    var nodes = document.getElementById("nodes");
-    pts.forEach(function (p, i) {
-      var c = OBS.el("circle", { class: "node", cx: cx(i), cy: ysLine(p.line), r: 3 }, nodes);
-      c.style.animationDelay = (0.9 + i * 0.1) + "s";
+    sheet.labels.forEach(function (lab, i) {
+      if (n > 8 && i % 2) return;
+      OBS.el("text", { class: "blabel", x: cx(i), y: py0 + 14 }, labels).textContent = lab;
     });
   }
-  OBS.loadData().then(render);
+  OBS.loadData().then(function (data) { render(OBS.normalizeSheet(data)); });
 })();
 </script>
 </body>

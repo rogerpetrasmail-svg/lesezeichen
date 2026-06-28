@@ -4,32 +4,51 @@ Modulares Daten- & Grafik-System für OBS-Studio (HTML Browser Sources).
 Alle Elemente haben einen **transparenten Hintergrund** und sind in OBS frei
 positionier- und skalierbar. Standard-Design: Industrial-Orange (`#d35400`).
 
+Das System ist **Multi-Sheet / Multi-Datenreihen-fähig**: Jedes Tabellenblatt
+der Excel-Datei wird zu einem Diagramm-Datensatz, der mehrere Datenreihen
+(`Var 1`, `Var 2`, …) gleichzeitig enthalten kann. Es läuft komplett lokal
+**ohne externe Bibliotheken** und **ohne Server** direkt über `file:///`.
+
 ## Struktur
 
 ```
 .
-├── export_data.py            # Python-Utility: Excel -> dashboard_data.json (mit Dummy-Daten)
-├── dashboard_data.json       # generierte Datenquelle für alle Module
-├── customizer.html           # Live-Steuerung (Farben, Linienstärke, Speed, Glow, Rahmen)
+├── export_data.py            # Excel-Matrix -> dashboard_data.json + .js (Dummy-Daten inkl.)
+├── dashboard_data.json       # generierte Datenquelle (Kontrolle / Server)
+├── dashboard_data.js         # generierte Datenquelle als window.OBS_DATA (file://-tauglich)
+├── customizer.html           # Live-Steuerung + Sheet-Auswahl + OBS-URL-Generator
 ├── shared/
-│   ├── obs-core.css          # gemeinsame Basis-Styles + CSS-Variablen + Tech-Rahmen
-│   └── obs-core.js           # Settings, Live-Update-Kanäle, Daten-Loader, SVG-Helfer
+│   ├── obs-core.css          # Basis-Styles + CSS-Variablen + Tech-Rahmen
+│   └── obs-core.js           # Settings, Live-Update, Daten-Loader, Sheet-/Serien-Helfer
 ├── gauges/                   # 4 Gauge-Module
-│   ├── orbital-core.html
-│   ├── linear-accelerator.html
-│   ├── target-scope.html
-│   └── segmented-matrix.html
-└── charts/                   # 14 Diagramm-Module
-    ├── line-digital-grid.html      ├── line-stepped-pulse.html
-    ├── bar-solid-neon.html         ├── bar-crosshatched.html
-    ├── pie-tech-donut.html         ├── pie-exploded-segments.html
-    ├── area-glow-fill.html         ├── area-scanlines.html
-    ├── scatter-crosshair-dots.html ├── scatter-signal-matrix.html
-    ├── radar-spider-web.html       ├── radar-sonar-scan.html
-    └── combo-trend-analyzer.html   └── combo-minmax-cage.html
+└── charts/                   # 14 Diagramm-Module (7 Typen × 2 Varianten)
 ```
 
-## 1. Daten erzeugen
+## 1. Datenstruktur
+
+`dashboard_data.json` / `dashboard_data.js`:
+
+```json
+{
+  "meta": { "source": "dashboard.xlsx", "sheets_found": ["Umsatz", "Profil"] },
+  "sheets": {
+    "Umsatz": {
+      "labels":   ["Jan", "Feb", "Mrz", "..."],
+      "datasets": {
+        "Var 1": [200, 300, 350, "..."],
+        "Var 2": [50,  60,  70,  "..."]
+      }
+    }
+  }
+}
+```
+
+- **Ein Sheet = ein Diagramm-Datensatz.** 1. Spalte der Excel-Tabelle = `labels`
+  (X-Achse/Kategorien), jede weitere Spalte = eine Datenreihe (Spaltenkopf = Name).
+- Jedes Diagramm-Modul kann **jedes** Sheet rendern – der Visualstil steckt im Modul,
+  die Daten kommen über `?sheet=`.
+
+## 2. Daten erzeugen
 
 ```bash
 # optional: pip install pandas openpyxl   (nur für echte Excel-Dateien nötig)
@@ -37,65 +56,81 @@ python3 export_data.py
 ```
 
 - Pfad zur Excel-Datei in `export_data.py` über `EXCEL_PATH` setzen.
-- Ohne Excel/pandas werden automatisch realistische **Dummy-Daten** geschrieben –
-  das System ist also sofort testbar.
-- Erwartete Tabellenblätter (generisch): `gauges`, `line`, `bar`, `pie`,
-  `area`, `scatter`, `radar`, `combo`. Fehlende Blätter werden mit Dummy-Werten gefüllt.
+- Erzeugt **zwei** Dateien mit gleichem Inhalt: `dashboard_data.json` und
+  `dashboard_data.js` (`window.OBS_DATA = {...}`).
+- Ohne Excel/pandas werden realistische **Dummy-Daten** mit mehreren Sheets und
+  mehreren Datenreihen geschrieben – sofort testbar.
 
-## 2. In OBS einbinden
+## 3. Datenzugriff & `file://` (kein CORS)
 
-Jedes Modul ist eine eigenständige HTML-Datei. In OBS:
-**Quellen → + → Browser** → *Lokale Datei* → eine der Modul-HTMLs wählen.
-Breite/Höhe nach Bedarf (z. B. 400×260 für Charts, 300×300 für Gauges).
-Der Hintergrund ist transparent – das Element lässt sich frei platzieren.
+`OBS.loadData()` lädt in dieser Reihenfolge:
 
-Wichtig: Die Module laden `shared/` und `dashboard_data.json` über relative
-Pfade. Die Ordnerstruktur muss also erhalten bleiben (am einfachsten: das
-ganze Verzeichnis aus einem lokalen Webserver oder per Datei-URL laden).
+1. bereits per `<script>` gesetztes `window.OBS_DATA`,
+2. sonst dynamisch nachgeladenes `dashboard_data.js` (Script-Tag — funktioniert
+   über `file:///` **ohne CORS-Fehler**, anders als `fetch`),
+3. als Server-Fallback `fetch('dashboard_data.json')`.
 
-### Gauge-Auswahl
+Damit laufen die Module per Doppelklick (`file://`) **und** über `http://`.
 
-Gauges zeigen standardmäßig je einen Eintrag aus `dashboard_data.json`.
-Andere Werte per URL-Parameter wählen:
-`orbital-core.html?gauge=g3` oder `orbital-core.html?index=2`.
+## 4. In OBS einbinden
 
-## 3. Live-Customizer
+**Quellen → + → Browser** → *Lokale Datei* → eine Modul-HTML wählen, oder eine
+fertige URL aus dem Customizer einfügen. Die Ordnerstruktur muss erhalten bleiben
+(Module laden `shared/` und `dashboard_data.js` über relative Pfade).
 
-`customizer.html` im Browser öffnen. Über Schieberegler/Farbpicker lassen sich
-**global** anpassen: Primär-/Akzent-/Textfarbe, Linienstärke, Animations­geschwindigkeit,
-Glow und der Tech-Rahmen. Die Vorschau rechts zeigt alle 18 Module live.
+### URL-Parameter pro Modul
 
-Die Einstellungen werden auf drei Wegen verteilt:
+| Parameter | Wirkung | Beispiel |
+|-----------|---------|----------|
+| `sheet` | aktives Tabellenblatt (sonst erstes) | `?sheet=Umsatz` |
+| `dataset` | (Gauges/Pie) Datenreihe wählen | `&dataset=Var 2` |
+| `agg` | (Gauges) `last`·`max`·`min`·`avg`·`sum`·`first` | `&agg=max` |
+| `min` `max` `unit` `label` | (Gauges) Skala/Beschriftung | `&max=1000&unit=€` |
+| `primary` `accent` `text` | Farben (ohne `#`) | `&primary=00c8ff` |
+| `lineWidth` `speed` `glow` `frameOpacity` `frame` | Design | `&speed=1.5&frame=0` |
 
-1. **localStorage** – persistent; OBS-Sources im selben Browser-Profil lesen sie.
-2. **BroadcastChannel** – live über alle Tabs/Sources einer Browser-Instanz.
-3. **postMessage** – live in die Vorschau-iframes des Customizers.
+Beispiel:
+`charts/line-digital-grid.html?sheet=Umsatz&primary=00c8ff&accent=33ccff&speed=1.5`
 
-Zusätzlich erzeugt der Customizer einen **URL-Parameter-String** (Button
-„OBS-URL kopieren"), den man an jede Modul-URL anhängen kann, um ein Modul fest
-zu konfigurieren – ideal, wenn OBS-Sources kein localStorage teilen:
+## 5. Live-Customizer
 
-```
-gauges/orbital-core.html?primary=00aaff&accent=33ccff&lineWidth=3&speed=1.5&glow=10&frame=1
-```
+`customizer.html` öffnen. Funktionen:
 
-## Design-Architektur
+- **Datenblatt-Auswahl** – legt fest, welches Sheet (`?sheet=`) alle Vorschau-Module zeigen.
+- **Live-Design** – Farben, Linienstärke, Speed, Glow, Rahmen wirken sofort auf
+  die Vorschau und alle OBS-Sources im selben Browser/Profil
+  (localStorage + BroadcastChannel + postMessage).
+- **Pro Kachel:** „↗" öffnet das Modul in neuem Tab, „⧉" kopiert die **vollständige
+  OBS-URL** inkl. `?sheet=` und aller Design-Parameter zum Einfügen in OBS.
 
-- **Zentrale CSS-Variablen** in `shared/obs-core.css` (`--c-primary`, `--c-accent`,
-  `--line-width`, `--speed`, `--glow`, …). Der Customizer überschreibt sie live,
-  wodurch sich Farben/Linien/Glow ohne Neu-Rendern aktualisieren.
-- **Animationsgeschwindigkeit** ist überall als `calc(<dauer> / var(--speed))`
-  umgesetzt – ein Regler steuert alle Module.
-- **Gauges** animieren dauerhaft dezent (rotierende Ringe, Scan, Flacker, Atem-Puls).
-- **Diagramme** sind „ruhige" Standbilder mit nur **einer** In-Animation
-  (Linie zeichnen / Balken aufsteigen / Segmente einwachsen).
-- Jedes Modul bringt seinen eigenen `.tech-frame` (CSS) mit, damit es überall
-  in OBS allein stehen kann.
+> Hinweis: Die Vorschau-iframes bekommen bewusst **nur** `?sheet=`/`?dataset=` im
+> URL (kein Design), damit die Live-Kanäle das Design steuern können. Die kopierte
+> URL enthält dagegen das volle Design – für den eigenständigen OBS-Betrieb, wo
+> kein Live-Customizer läuft.
+
+## 6. Multi-Serien-Architektur (Diagramme)
+
+- `OBS.normalizeSheet(data)` liefert `{ name, labels, series:[{name,values}], min, max }`.
+  Min/Max werden **global über alle Datenreihen** ermittelt → **gemeinsame
+  Y-Skala**, keine Linie bricht aus dem Grid.
+- `OBS.seriesStyle(i)` koppelt die Reihen an die CSS-Variablen:
+  Reihe 0 → `var(--c-primary)`, 1 → `var(--c-accent)`, 2 → `var(--c-text)`;
+  ab Reihe 3 wiederholen sich die Farben mit Strich-Muster (optisch getrennt,
+  aber weiter live umfärbbar).
+- Jedes Modul iteriert über `sheet.series` und erzeugt pro Reihe eigene
+  `<path>`/`<rect>`/`<polygon>`-Elemente.
+
+## 7. Gauges
+
+Gauges ziehen einen Einzelwert aus einem Sheet via
+`OBS.gaugeFromSheet(data)` – gesteuert über `?sheet=`, `?dataset=`, `?agg=`
+(Standard `last`), optional `?min/?max/?unit/?label`.
 
 ## Lokaler Test
 
 ```bash
 python3 export_data.py
-python3 -m http.server 8000
-# Browser: http://localhost:8000/customizer.html
+# Variante A: direkt per Doppelklick (file://) öffnen
+# Variante B: Server
+python3 -m http.server 8000   # -> http://localhost:8000/customizer.html
 ```
