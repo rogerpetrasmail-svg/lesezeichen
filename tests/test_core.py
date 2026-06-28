@@ -9,8 +9,13 @@ oder ohne pytest:
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+# Projekt-Wurzelverzeichnis in den Suchpfad aufnehmen, damit das Paket ``app``
+# auch beim direkten Aufruf ``python tests/test_core.py`` gefunden wird.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.analysis import normalize_result
 from app.database import Database
